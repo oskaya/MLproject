@@ -5,7 +5,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
+        .container { max-width: 1400px; margin: 0 auto; }
         .panel { background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 5px; }
         .btn { padding: 10px 20px; margin: 5px; border: none; border-radius: 3px; cursor: pointer; }
         .btn-primary { background: #007bff; color: white; }
@@ -17,6 +17,50 @@
         .status { padding: 10px; margin: 10px 0; border-radius: 3px; }
         .status-connected { background: #d4edda; color: #155724; }
         .status-disconnected { background: #f8d7da; color: #721c24; }
+        
+        /* Live Video Stream */
+        .video-container {
+            position: relative;
+            display: inline-block;
+            margin: 10px 0;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            background: #000;
+        }
+        .live-frame {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+        .video-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        /* Detection overlays */
+        .detection-bbox {
+            position: absolute;
+            border: 3px solid #00ff00;
+            background: rgba(0, 255, 0, 0.1);
+            pointer-events: none;
+        }
+        .detection-label {
+            position: absolute;
+            background: #00ff00;
+            color: black;
+            padding: 2px 6px;
+            font-size: 12px;
+            font-weight: bold;
+            top: -22px;
+            left: 0;
+            border-radius: 3px;
+            white-space: nowrap;
+        }
+        
         .detection-item, .tracked-item { 
             background: white; 
             padding: 15px; 
@@ -80,35 +124,37 @@
             border-left: 4px solid #dc3545;
         }
         
-        /* Image display styles */
-        .image-container {
-            position: relative;
-            display: inline-block;
-            margin: 10px 0;
+        /* Two column layout */
+        .main-content {
+            display: flex;
+            gap: 20px;
         }
-        .detection-image {
-            max-width: 100%;
-            height: auto;
-            border: 2px solid #ddd;
-            border-radius: 5px;
+        .left-column {
+            flex: 2;
         }
-        .bbox {
+        .right-column {
+            flex: 1;
+        }
+        
+        /* Detection info overlay */
+        .detection-info {
             position: absolute;
-            border: 2px solid #ff0000;
-            background: rgba(255, 0, 0, 0.1);
-            pointer-events: none;
-        }
-        .bbox-label {
-            position: absolute;
-            background: #ff0000;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
             color: white;
-            padding: 2px 6px;
-            font-size: 12px;
-            font-weight: bold;
-            top: -20px;
-            left: 0;
-            border-radius: 3px;
-            white-space: nowrap;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+        
+        /* No camera placeholder */
+        .no-camera {
+            background: #333;
+            color: white;
+            text-align: center;
+            padding: 40px;
+            border-radius: 5px;
         }
     </style>
 </head>
@@ -132,38 +178,62 @@
             <h2>Camera Controls</h2>
             <button id="startBtn" class="btn btn-success" onclick="startCamera()" disabled>Start Camera</button>
             <button id="stopBtn" class="btn btn-danger" onclick="stopCamera()" disabled>Stop Camera</button>
-            <button id="detectBtn" class="btn btn-primary" onclick="detectObjects()" disabled>Detect Objects</button>
         </div>
         
-        <div class="panel">
-            <h2>Detection Results</h2>
-            <div id="detections">No detections yet. Click "Detect Objects" to analyze current frame.</div>
-        </div>
-        
-        <div class="panel">
-            <h2>Tracking</h2>
-            
-            <!-- Tracking Interval Controls -->
-            <div class="interval-controls">
-                <label><strong>Check Interval:</strong></label>
-                <button class="btn btn-primary btn-small" onclick="changeInterval(-1)">-</button>
-                <div class="interval-display" id="intervalDisplay">5 seconds</div>
-                <button class="btn btn-primary btn-small" onclick="changeInterval(1)">+</button>
+        <div class="main-content">
+            <!-- Left Column: Live Video Stream with Auto-Detection -->
+            <div class="left-column">
+                <div class="panel">
+                    <h2>📹 Live Camera Stream (Auto-Detection every 5s)</h2>
+                    <div class="video-container" id="videoContainer">
+                        <div id="noCamera" class="no-camera">
+                            📷 Camera not streaming<br>
+                            <small>Start camera to see live video with automatic object detection</small>
+                        </div>
+                        <img id="liveFrame" class="live-frame" style="display: none;" />
+                        <div class="video-overlay" id="videoOverlay"></div>
+                        <div class="detection-info" id="detectionInfo" style="display: none;">
+                            <div>Status: <span id="detectionStatus">Waiting...</span></div>
+                            <div>Objects: <span id="detectionCount">0</span></div>
+                            <div>Last Update: <span id="lastUpdate">Never</span></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <h2>Current Detections</h2>
+                    <div id="currentDetections">Start camera to see automatic object detection results.</div>
+                </div>
             </div>
             
-            <button id="trackingBtn" class="btn btn-success" onclick="toggleTracking()" disabled>Start Tracking</button>
-            <button class="btn btn-danger" onclick="clearTracking()">Clear All</button>
-            <div id="trackedItems">No items being tracked.</div>
+            <!-- Right Column: Tracking Controls -->
+            <div class="right-column">
+                <div class="panel">
+                    <h2>Tracking Controls</h2>
+                    
+                    <!-- Tracking Interval Controls -->
+                    <div class="interval-controls">
+                        <label><strong>Tracking Check Interval:</strong></label>
+                        <button class="btn btn-primary btn-small" onclick="changeInterval(-1)">-</button>
+                        <div class="interval-display" id="intervalDisplay">5 seconds</div>
+                        <button class="btn btn-primary btn-small" onclick="changeInterval(1)">+</button>
+                    </div>
+                    
+                    <button id="trackingBtn" class="btn btn-success" onclick="toggleTracking()" disabled>Start Tracking</button>
+                    <button class="btn btn-danger" onclick="clearTracking()">Clear All</button>
+                    <div id="trackedItems">No items being tracked.</div>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
         const socket = io();
         let isTracking = false;
-        let currentImage = null;
         let trackingInterval = 5;
+        let lastDetections = [];
 
-        // Socket events
+        // Socket events for camera status
         socket.on('camera_status', function(data) {
             updateCameraStatus(data.connected, data.streaming);
             if (data.error) {
@@ -171,6 +241,31 @@
             }
         });
 
+        // Live frame updates
+        socket.on('live_frame', function(data) {
+            const liveFrame = document.getElementById('liveFrame');
+            const noCamera = document.getElementById('noCamera');
+            const detectionInfo = document.getElementById('detectionInfo');
+            
+            liveFrame.src = 'data:image/jpeg;base64,' + data.frame;
+            liveFrame.style.display = 'block';
+            noCamera.style.display = 'none';
+            detectionInfo.style.display = 'block';
+        });
+
+        // Auto-detection results every 5 seconds
+        socket.on('auto_detection_result', function(data) {
+            lastDetections = data.detections;
+            updateDetectionOverlays(data.detections);
+            updateCurrentDetections(data.detections);
+            
+            // Update detection info
+            document.getElementById('detectionStatus').textContent = 'Auto-detecting';
+            document.getElementById('detectionCount').textContent = data.detections.length;
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+        });
+
+        // Alarm events
         socket.on('alarm_triggered', function(data) {
             showAlarm(data.missing_items);
             playAlarmSound();
@@ -180,31 +275,111 @@
             hideAlarm();
         });
 
+        // Update detection overlays on live frame
+        function updateDetectionOverlays(detections) {
+            const overlay = document.getElementById('videoOverlay');
+            const liveFrame = document.getElementById('liveFrame');
+            
+            // Clear existing overlays
+            overlay.innerHTML = '';
+            
+            if (!detections || detections.length === 0) return;
+            
+            // Wait for image to load to get correct dimensions
+            const updateOverlays = () => {
+                const scaleX = liveFrame.offsetWidth / 640;
+                const scaleY = liveFrame.offsetHeight / 480;
+                
+                detections.forEach((detection, index) => {
+                    const bbox = detection.bbox;
+                    
+                    // Create bounding box
+                    const boxDiv = document.createElement('div');
+                    boxDiv.className = 'detection-bbox';
+                    boxDiv.style.left = (bbox.x1 * scaleX) + 'px';
+                    boxDiv.style.top = (bbox.y1 * scaleY) + 'px';
+                    boxDiv.style.width = ((bbox.x2 - bbox.x1) * scaleX) + 'px';
+                    boxDiv.style.height = ((bbox.y2 - bbox.y1) * scaleY) + 'px';
+                    
+                    // Create label
+                    const labelDiv = document.createElement('div');
+                    labelDiv.className = 'detection-label';
+                    labelDiv.textContent = `${detection.label} (${(detection.confidence * 100).toFixed(1)}%)`;
+                    
+                    boxDiv.appendChild(labelDiv);
+                    overlay.appendChild(boxDiv);
+                });
+            };
+
+            if (liveFrame.complete && liveFrame.offsetWidth > 0) {
+                updateOverlays();
+            } else {
+                liveFrame.onload = updateOverlays;
+            }
+        }
+
+        // Update current detections list
+        function updateCurrentDetections(detections) {
+            const container = document.getElementById('currentDetections');
+            
+            if (!detections || detections.length === 0) {
+                container.innerHTML = '<p>No objects detected in current frame.</p>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <p><strong>${detections.length} objects detected:</strong></p>
+                ${detections.map(detection => `
+                    <div class="detection-item">
+                        <div class="item-info">
+                            <div class="item-label">
+                                ${detection.label}
+                                <span class="confidence">${(detection.confidence * 100).toFixed(1)}%</span>
+                            </div>
+                            <div class="item-details">
+                                Class ID: ${detection.class_id} • 
+                                BBox: (${detection.bbox.x1.toFixed(0)}, ${detection.bbox.y1.toFixed(0)}) - 
+                                (${detection.bbox.x2.toFixed(0)}, ${detection.bbox.y2.toFixed(0)})
+                            </div>
+                        </div>
+                        <button class="btn btn-primary" onclick="addToTracking(${JSON.stringify(detection).replace(/"/g, '&quot;')})">
+                            Track This
+                        </button>
+                    </div>
+                `).join('')}
+            `;
+        }
+
         // Update camera status
         function updateCameraStatus(connected, streaming = false) {
             const statusEl = document.getElementById('cameraStatus');
             const startBtn = document.getElementById('startBtn');
             const stopBtn = document.getElementById('stopBtn');
-            const detectBtn = document.getElementById('detectBtn');
+            const liveFrame = document.getElementById('liveFrame');
+            const noCamera = document.getElementById('noCamera');
+            const detectionInfo = document.getElementById('detectionInfo');
             
             if (connected && streaming) {
                 statusEl.className = 'status status-connected';
-                statusEl.textContent = '📷 Camera: Connected & Streaming';
+                statusEl.textContent = '📷 Camera: Connected & Streaming (Auto-Detection Active)';
                 startBtn.disabled = true;
                 stopBtn.disabled = false;
-                detectBtn.disabled = false;
             } else if (connected) {
                 statusEl.className = 'status status-connected';
                 statusEl.textContent = '📷 Camera: Connected (Not Streaming)';
                 startBtn.disabled = false;
                 stopBtn.disabled = false;
-                detectBtn.disabled = true;
+                liveFrame.style.display = 'none';
+                noCamera.style.display = 'block';
+                detectionInfo.style.display = 'none';
             } else {
                 statusEl.className = 'status status-disconnected';
                 statusEl.textContent = '📷 Camera: Disconnected';
                 startBtn.disabled = true;
                 stopBtn.disabled = true;
-                detectBtn.disabled = true;
+                liveFrame.style.display = 'none';
+                noCamera.style.display = 'block';
+                detectionInfo.style.display = 'none';
             }
         }
 
@@ -256,117 +431,6 @@
             }
         }
 
-        // Detection function
-        async function detectObjects() {
-            const detectBtn = document.getElementById('detectBtn');
-            const originalText = detectBtn.textContent;
-            
-            try {
-                detectBtn.textContent = 'Analyzing...';
-                detectBtn.disabled = true;
-                
-                const response = await fetch('/api/detect', { method: 'POST' });
-                const data = await response.json();
-                
-                if (data.success) {
-                    currentImage = data.image;
-                    displayDetections(data.detections, data.image);
-                } else {
-                    alert(data.message);
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            } finally {
-                detectBtn.textContent = originalText;
-                detectBtn.disabled = false;
-            }
-        }
-
-        // Display detections with image and bounding boxes
-        function displayDetections(detections, imageData) {
-            const container = document.getElementById('detections');
-            
-            if (!detections || detections.length === 0) {
-                container.innerHTML = `
-                    <div class="image-container">
-                        <img src="data:image/jpeg;base64,${imageData}" class="detection-image" />
-                    </div>
-                    <p>No objects detected in current frame.</p>
-                `;
-                return;
-            }
-            
-            const imageHtml = `
-                <div class="image-container" id="imageContainer">
-                    <img src="data:image/jpeg;base64,${imageData}" class="detection-image" 
-                         onload="drawBoundingBoxes(${JSON.stringify(detections).replace(/"/g, '&quot;')})" />
-                </div>
-            `;
-            
-            const detectionsHtml = detections.map(detection => `
-                <div class="detection-item">
-                    <div class="item-info">
-                        <div class="item-label">
-                            ${detection.label}
-                            <span class="confidence">${(detection.confidence * 100).toFixed(1)}%</span>
-                        </div>
-                        <div class="item-details">
-                            Class ID: ${detection.class_id} • 
-                            BBox: (${detection.bbox.x1.toFixed(0)}, ${detection.bbox.y1.toFixed(0)}) - 
-                            (${detection.bbox.x2.toFixed(0)}, ${detection.bbox.y2.toFixed(0)})
-                        </div>
-                    </div>
-                    <button class="btn btn-primary" onclick="addToTracking(${JSON.stringify(detection).replace(/"/g, '&quot;')})">
-                        Track This
-                    </button>
-                </div>
-            `).join('');
-            
-            container.innerHTML = `
-                ${imageHtml}
-                <p><strong>${detections.length} objects detected:</strong></p>
-                ${detectionsHtml}
-            `;
-        }
-
-        // Draw bounding boxes on the image
-        function drawBoundingBoxes(detections) {
-            const imageContainer = document.getElementById('imageContainer');
-            const image = imageContainer.querySelector('.detection-image');
-            
-            const existingBoxes = imageContainer.querySelectorAll('.bbox');
-            existingBoxes.forEach(box => box.remove());
-            
-            if (image.complete) {
-                addBoundingBoxes(detections, imageContainer, image);
-            } else {
-                image.onload = () => addBoundingBoxes(detections, imageContainer, image);
-            }
-        }
-
-        function addBoundingBoxes(detections, container, image) {
-            const scaleX = image.offsetWidth / 640;
-            const scaleY = image.offsetHeight / 480;
-            
-            detections.forEach((detection, index) => {
-                const bbox = detection.bbox;
-                
-                const boxDiv = document.createElement('div');
-                boxDiv.className = 'bbox';
-                boxDiv.style.left = (bbox.x1 * scaleX) + 'px';
-                boxDiv.style.top = (bbox.y1 * scaleY) + 'px';
-                boxDiv.style.width = ((bbox.x2 - bbox.x1) * scaleX) + 'px';
-                boxDiv.style.height = ((bbox.y2 - bbox.y1) * scaleY) + 'px';
-                
-                const labelDiv = document.createElement('div');
-                labelDiv.className = 'bbox-label';
-                labelDiv.textContent = `${detection.label} (${(detection.confidence * 100).toFixed(1)}%)`;
-                
-                boxDiv.appendChild(labelDiv);
-                container.appendChild(boxDiv);
-            });
-        }
-
         // Alarm functions
         function showAlarm(missingItems) {
             const alarmPanel = document.getElementById('alarmPanel');
@@ -400,22 +464,26 @@
         }
 
         function playAlarmSound() {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-            
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            oscillator.frequency.value = 800;
-            oscillator.type = 'square';
-            
-            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-            gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01);
-            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
-            
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.3);
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800;
+                oscillator.type = 'square';
+                
+                gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.3);
+            } catch (error) {
+                console.log('Audio not available');
+            }
         }
 
         // Tracking functions
@@ -487,7 +555,7 @@
                     if (data.alarm_active) {
                         statusHtml = '<div style="color: red; font-weight: bold;">🚨 ALARM ACTIVE - Items Missing!</div>';
                     } else {
-                        statusHtml = `<div style="color: green; font-weight: bold;">✅ All Items Present (checking every ${data.tracking_interval}s)</div>`;
+                        statusHtml = `<div style="color: green; font-weight: bold;">✅ Tracking Active (checking every ${data.tracking_interval}s)</div>`;
                     }
                 }
                 
@@ -505,8 +573,7 @@
                                     </div>
                                     <div class="item-details">
                                         Added: ${new Date(item.added_at).toLocaleTimeString()} • 
-                                        Confidence: ${(item.confidence * 100).toFixed(1)}% • 
-                                        Class ID: ${item.class_id}
+                                        Confidence: ${(item.confidence * 100).toFixed(1)}%
                                         ${!item.is_present ? `<br><strong>Last seen: ${new Date(item.last_seen).toLocaleTimeString()}</strong>` : ''}
                                     </div>
                                 </div>
