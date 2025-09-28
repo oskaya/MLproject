@@ -8,7 +8,8 @@ import json
 import time
 import base64
 import io
-from datetime import datetime
+import threading
+from datetime import datetime, timedelta
 from typing import List, Dict
 
 app = Flask(__name__)
@@ -22,10 +23,95 @@ camera_connected = False
 latest_frame = None
 tracked_items = []
 tracking_active = False
+tracking_interval = 5  # Default 5 seconds
+alarm_active = False
+missing_items = []
+tracking_thread = None
 
 @app.route('/')
 def index():
     return render_template('index.html')
+
+# Real tracking implementation
+def check_tracked_items():
+    """Continuously check if tracked items are still present"""
+    global alarm_active, missing_items, latest_frame, tracking_active
+    
+    print(f"🔍 Started tracking monitor (checking every {tracking_interval}s)")
+    
+    while tracking_active:
+        if not latest_frame or not tracked_items:
+            print("⏳ No frame or no tracked items, waiting...")
+            time.sleep(tracking_interval)
+            continue
+            
+        try:
+            print(f"📡 Sending frame to ML API for tracking check... (interval: {tracking_interval}s)")
+            
+            # Get current detections from ML API
+            image_bytes = base64.b64decode(latest_frame)
+            files = {'file': ('frame.jpg', io.BytesIO(image_bytes), 'image/jpeg')}
+            
+            response = requests.post(ML_API_URL, files=files, timeout=10)
+            
+            if response.status_code == 200:
+                ml_result = response.json()
+                current_detections = ml_result.get('detections', [])
+                
+                print(f"📊 Got {len(current_detections)} current detections, checking {len(tracked_items)} tracked items")
+                
+                # Check each tracked item
+                missing_items = []
+                for tracked_item in tracked_items:
+                    item_found = False
+                    
+                    # Look for similar objects in current detections
+                    for detection in current_detections:
+                        if detection['label'] == tracked_item['label']:
+                            # Simple matching by label and confidence threshold
+                            if detection['confidence'] > 0.5:
+                                item_found = True
+                                tracked_item['last_seen'] = datetime.now().isoformat()
+                                tracked_item['is_present'] = True
+                                break
+                    
+                    if not item_found:
+                        tracked_item['is_present'] = False
+                        # Check if missing for more than 2 intervals
+                        last_seen = datetime.fromisoformat(tracked_item['last_seen'])
+                        if (datetime.now() - last_seen).total_seconds() > (tracking_interval * 2):
+                            missing_items.append(tracked_item)
+                            print(f"❌ Missing: {tracked_item['label']}")
+                        else:
+                            print(f"⚠️ Temporary loss: {tracked_item['label']}")
+                    else:
+                        print(f"✅ Found: {tracked_item['label']}")
+                
+                # Trigger alarm if items missing
+                if missing_items and not alarm_active:
+                    alarm_active = True
+                    print(f"🚨 ALARM TRIGGERED: {len(missing_items)} items missing!")
+                    socketio.emit('alarm_triggered', {
+                        'missing_items': missing_items,
+                        'timestamp': datetime.now().isoformat()
+                    }, broadcast=True)
+                elif not missing_items and alarm_active:
+                    alarm_active = False
+                    print("✅ All items found - alarm cleared")
+                    socketio.emit('alarm_cleared', {
+                        'timestamp': datetime.now().isoformat()
+                    }, broadcast=True)
+                    
+            else:
+                print(f"❌ ML API error during tracking: {response.status_code}")
+                
+        except Exception as e:
+            print(f"❌ Error checking tracked items: {e}")
+        
+        print(f"⏱️ Waiting {tracking_interval} seconds before next check...")
+        time.sleep(tracking_interval)
+    
+    print("🛑 Tracking monitor stopped")
 
 # WebSocket handlers for camera communication
 @socketio.on('camera_ready')
@@ -50,7 +136,6 @@ def handle_camera_stopped(data):
 @socketio.on('connect')
 def handle_web_client_connect():
     print("🌐 Web client connected")
-    # Send current camera status to newly connected client
     emit('camera_status', {
         'connected': camera_connected,
         'streaming': latest_frame is not None
@@ -64,7 +149,7 @@ def handle_web_client_disconnect():
 def handle_camera_error(data):
     print(f"❌ Camera error: {data.get('message')}")
     emit('camera_status', {
-        'connected': camera_connected, 
+        'connected': camera_connected,
         'streaming': False,
         'error': data.get('message')
     }, broadcast=True)
@@ -73,7 +158,8 @@ def handle_camera_error(data):
 def handle_camera_connect(data):
     global camera_connected
     camera_connected = True
-    print(f"Camera connected: {data.get('camera_id', 'unknown')}")
+    camera_id = data.get('camera_id', 'unknown')
+    print(f"📹 Camera connected: {camera_id}")
     emit('camera_status', {'connected': True}, broadcast=True)
 
 @socketio.on('camera_disconnect')
@@ -81,14 +167,13 @@ def handle_camera_disconnect():
     global camera_connected, latest_frame
     camera_connected = False
     latest_frame = None
-    print("Camera disconnected")
+    print("📹 Camera disconnected")
     emit('camera_status', {'connected': False}, broadcast=True)
 
 @socketio.on('frame_data')
 def handle_frame_data(data):
     global latest_frame
     latest_frame = data['frame']
-    # Broadcast frame to web clients if needed
     emit('new_frame', data, broadcast=True)
 
 # API endpoints for web interface
@@ -213,19 +298,29 @@ def remove_from_tracking():
 @app.route('/api/tracking/start', methods=['POST'])
 def start_tracking():
     """Start active tracking"""
-    global tracking_active
+    global tracking_active, tracking_thread
     
     if not tracked_items:
         return jsonify({'success': False, 'message': 'No items to track'})
     
+    if tracking_active:
+        return jsonify({'success': False, 'message': 'Tracking already active'})
+    
     tracking_active = True
-    return jsonify({'success': True, 'message': 'Tracking started'})
+    
+    # Start monitoring thread
+    if tracking_thread is None or not tracking_thread.is_alive():
+        tracking_thread = threading.Thread(target=check_tracked_items, daemon=True)
+        tracking_thread.start()
+    
+    return jsonify({'success': True, 'message': f'Tracking started (checking every {tracking_interval}s)'})
 
 @app.route('/api/tracking/stop', methods=['POST'])
 def stop_tracking():
     """Stop active tracking"""
-    global tracking_active
+    global tracking_active, alarm_active
     tracking_active = False
+    alarm_active = False
     return jsonify({'success': True, 'message': 'Tracking stopped'})
 
 @app.route('/api/tracking/status', methods=['GET'])
@@ -233,17 +328,55 @@ def tracking_status():
     """Get current tracking status"""
     return jsonify({
         'tracking_active': tracking_active,
+        'tracking_interval': tracking_interval,
+        'alarm_active': alarm_active,
         'tracked_items': tracked_items,
+        'missing_items': missing_items,
         'count': len(tracked_items)
     })
 
 @app.route('/api/tracking/clear', methods=['POST'])
 def clear_tracking():
     """Clear all tracked items"""
-    global tracked_items, tracking_active
+    global tracked_items, tracking_active, alarm_active
     tracked_items = []
     tracking_active = False
+    alarm_active = False
     return jsonify({'success': True, 'message': 'All tracked items cleared'})
+
+# Tracking interval control
+@app.route('/api/tracking/interval', methods=['POST'])
+def set_tracking_interval():
+    """Set tracking check interval"""
+    global tracking_interval
+    
+    data = request.get_json()
+    new_interval = data.get('interval')
+    
+    if not new_interval or not isinstance(new_interval, int) or new_interval < 1 or new_interval > 60:
+        return jsonify({'success': False, 'message': 'Interval must be between 1-60 seconds'})
+    
+    tracking_interval = new_interval
+    print(f"⏱️ Tracking interval changed to {tracking_interval} seconds")
+    
+    return jsonify({
+        'success': True, 
+        'message': f'Tracking interval set to {tracking_interval} seconds',
+        'interval': tracking_interval
+    })
+
+@app.route('/api/tracking/interval', methods=['GET'])
+def get_tracking_interval():
+    """Get current tracking interval"""
+    return jsonify({'interval': tracking_interval})
+
+# Alarm control endpoints
+@app.route('/api/alarm/acknowledge', methods=['POST'])
+def acknowledge_alarm():
+    """Acknowledge the alarm (silence it but keep tracking)"""
+    global alarm_active
+    alarm_active = False
+    return jsonify({'success': True, 'message': 'Alarm acknowledged'})
 
 if __name__ == '__main__':
     print("Starting Object Tracking Web App...")

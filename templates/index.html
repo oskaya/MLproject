@@ -11,6 +11,8 @@
         .btn-primary { background: #007bff; color: white; }
         .btn-success { background: #28a745; color: white; }
         .btn-danger { background: #dc3545; color: white; }
+        .btn-warning { background: #ffc107; color: #212529; }
+        .btn-small { padding: 5px 10px; font-size: 0.9em; }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .status { padding: 10px; margin: 10px 0; border-radius: 3px; }
         .status-connected { background: #d4edda; color: #155724; }
@@ -29,6 +31,54 @@
         .item-label { font-weight: bold; font-size: 1.1em; }
         .item-details { color: #666; font-size: 0.9em; margin-top: 5px; }
         .confidence { background: #e3f2fd; color: #1976d2; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; }
+        
+        /* Interval controls */
+        .interval-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .interval-display {
+            background: white;
+            padding: 8px 15px;
+            border: 2px solid #007bff;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 1.1em;
+            color: #007bff;
+        }
+        
+        /* Alarm styles */
+        .alarm-panel {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            color: #721c24;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+            display: none;
+        }
+        .alarm-active {
+            display: block !important;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+        .alarm-header {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .missing-item {
+            background: white;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 3px;
+            border-left: 4px solid #dc3545;
+        }
         
         /* Image display styles */
         .image-container {
@@ -70,6 +120,14 @@
             📷 Camera: Disconnected
         </div>
         
+        <!-- Alarm Panel -->
+        <div id="alarmPanel" class="alarm-panel">
+            <div class="alarm-header">🚨 SECURITY ALERT 🚨</div>
+            <div id="alarmMessage">Items are missing from tracking!</div>
+            <div id="missingItemsList"></div>
+            <button class="btn btn-warning" onclick="acknowledgeAlarm()">Acknowledge Alarm</button>
+        </div>
+        
         <div class="panel">
             <h2>Camera Controls</h2>
             <button id="startBtn" class="btn btn-success" onclick="startCamera()" disabled>Start Camera</button>
@@ -84,6 +142,15 @@
         
         <div class="panel">
             <h2>Tracking</h2>
+            
+            <!-- Tracking Interval Controls -->
+            <div class="interval-controls">
+                <label><strong>Check Interval:</strong></label>
+                <button class="btn btn-primary btn-small" onclick="changeInterval(-1)">-</button>
+                <div class="interval-display" id="intervalDisplay">5 seconds</div>
+                <button class="btn btn-primary btn-small" onclick="changeInterval(1)">+</button>
+            </div>
+            
             <button id="trackingBtn" class="btn btn-success" onclick="toggleTracking()" disabled>Start Tracking</button>
             <button class="btn btn-danger" onclick="clearTracking()">Clear All</button>
             <div id="trackedItems">No items being tracked.</div>
@@ -94,6 +161,7 @@
         const socket = io();
         let isTracking = false;
         let currentImage = null;
+        let trackingInterval = 5;
 
         // Socket events
         socket.on('camera_status', function(data) {
@@ -101,6 +169,15 @@
             if (data.error) {
                 alert('Camera Error: ' + data.error);
             }
+        });
+
+        socket.on('alarm_triggered', function(data) {
+            showAlarm(data.missing_items);
+            playAlarmSound();
+        });
+
+        socket.on('alarm_cleared', function(data) {
+            hideAlarm();
         });
 
         // Update camera status
@@ -128,6 +205,33 @@
                 startBtn.disabled = true;
                 stopBtn.disabled = true;
                 detectBtn.disabled = true;
+            }
+        }
+
+        // Interval control functions
+        async function changeInterval(delta) {
+            const newInterval = trackingInterval + delta;
+            if (newInterval < 1 || newInterval > 60) {
+                alert('Interval must be between 1-60 seconds');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/tracking/interval', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ interval: newInterval })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    trackingInterval = newInterval;
+                    document.getElementById('intervalDisplay').textContent = `${trackingInterval} seconds`;
+                } else {
+                    alert(data.message);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
             }
         }
 
@@ -192,7 +296,6 @@
                 return;
             }
             
-            // Create image with bounding boxes
             const imageHtml = `
                 <div class="image-container" id="imageContainer">
                     <img src="data:image/jpeg;base64,${imageData}" class="detection-image" 
@@ -200,7 +303,6 @@
                 </div>
             `;
             
-            // Create detection list
             const detectionsHtml = detections.map(detection => `
                 <div class="detection-item">
                     <div class="item-info">
@@ -232,11 +334,9 @@
             const imageContainer = document.getElementById('imageContainer');
             const image = imageContainer.querySelector('.detection-image');
             
-            // Remove existing bounding boxes
             const existingBoxes = imageContainer.querySelectorAll('.bbox');
             existingBoxes.forEach(box => box.remove());
             
-            // Wait for image to load
             if (image.complete) {
                 addBoundingBoxes(detections, imageContainer, image);
             } else {
@@ -245,17 +345,12 @@
         }
 
         function addBoundingBoxes(detections, container, image) {
-            const imageRect = image.getBoundingClientRect();
-            const containerRect = container.getBoundingClientRect();
-            
-            // Get scale factors
-            const scaleX = image.offsetWidth / 640; // Assuming 640px original width
-            const scaleY = image.offsetHeight / 480; // Assuming 480px original height
+            const scaleX = image.offsetWidth / 640;
+            const scaleY = image.offsetHeight / 480;
             
             detections.forEach((detection, index) => {
                 const bbox = detection.bbox;
                 
-                // Create bounding box element
                 const boxDiv = document.createElement('div');
                 boxDiv.className = 'bbox';
                 boxDiv.style.left = (bbox.x1 * scaleX) + 'px';
@@ -263,7 +358,6 @@
                 boxDiv.style.width = ((bbox.x2 - bbox.x1) * scaleX) + 'px';
                 boxDiv.style.height = ((bbox.y2 - bbox.y1) * scaleY) + 'px';
                 
-                // Create label
                 const labelDiv = document.createElement('div');
                 labelDiv.className = 'bbox-label';
                 labelDiv.textContent = `${detection.label} (${(detection.confidence * 100).toFixed(1)}%)`;
@@ -273,7 +367,58 @@
             });
         }
 
-        // Tracking functions (keeping existing code)
+        // Alarm functions
+        function showAlarm(missingItems) {
+            const alarmPanel = document.getElementById('alarmPanel');
+            const missingList = document.getElementById('missingItemsList');
+            
+            alarmPanel.className = 'alarm-panel alarm-active';
+            
+            missingList.innerHTML = missingItems.map(item => `
+                <div class="missing-item">
+                    <strong>${item.label}</strong> - Last seen: ${new Date(item.last_seen).toLocaleTimeString()}
+                </div>
+            `).join('');
+        }
+
+        function hideAlarm() {
+            const alarmPanel = document.getElementById('alarmPanel');
+            alarmPanel.className = 'alarm-panel';
+        }
+
+        async function acknowledgeAlarm() {
+            try {
+                const response = await fetch('/api/alarm/acknowledge', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    hideAlarm();
+                }
+            } catch (error) {
+                console.error('Error acknowledging alarm:', error);
+            }
+        }
+
+        function playAlarmSound() {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 800;
+            oscillator.type = 'square';
+            
+            gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.3);
+        }
+
+        // Tracking functions
         async function addToTracking(detection) {
             try {
                 const response = await fetch('/api/tracking/add', {
@@ -300,11 +445,7 @@
                 const data = await response.json();
                 
                 if (data.success) {
-                    isTracking = !isTracking;
-                    document.getElementById('trackingBtn').textContent = 
-                        isTracking ? 'Stop Tracking' : 'Start Tracking';
-                    document.getElementById('trackingBtn').className = 
-                        `btn ${isTracking ? 'btn-danger' : 'btn-success'}`;
+                    updateTrackingStatus();
                 } else {
                     alert(data.message);
                 }
@@ -320,7 +461,6 @@
                     const data = await response.json();
                     
                     if (data.success) {
-                        isTracking = false;
                         updateTrackingStatus();
                     }
                 } catch (error) {
@@ -337,20 +477,37 @@
                 const container = document.getElementById('trackedItems');
                 const trackingBtn = document.getElementById('trackingBtn');
                 
+                // Update interval display
+                trackingInterval = data.tracking_interval;
+                document.getElementById('intervalDisplay').textContent = `${trackingInterval} seconds`;
+                
+                // Show status
+                let statusHtml = '';
+                if (data.tracking_active) {
+                    if (data.alarm_active) {
+                        statusHtml = '<div style="color: red; font-weight: bold;">🚨 ALARM ACTIVE - Items Missing!</div>';
+                    } else {
+                        statusHtml = `<div style="color: green; font-weight: bold;">✅ All Items Present (checking every ${data.tracking_interval}s)</div>`;
+                    }
+                }
+                
                 if (data.tracked_items.length === 0) {
-                    container.innerHTML = 'No items being tracked.';
+                    container.innerHTML = statusHtml + 'No items being tracked.';
                     trackingBtn.disabled = true;
                 } else {
-                    container.innerHTML = `
+                    container.innerHTML = statusHtml + `
                         <p><strong>${data.count} items being tracked:</strong></p>
                         ${data.tracked_items.map(item => `
-                            <div class="tracked-item">
+                            <div class="tracked-item" style="${!item.is_present ? 'border-left: 4px solid red;' : ''}">
                                 <div class="item-info">
-                                    <div class="item-label">${item.label}</div>
+                                    <div class="item-label">
+                                        ${item.label} ${!item.is_present ? '❌ MISSING' : '✅'}
+                                    </div>
                                     <div class="item-details">
                                         Added: ${new Date(item.added_at).toLocaleTimeString()} • 
                                         Confidence: ${(item.confidence * 100).toFixed(1)}% • 
                                         Class ID: ${item.class_id}
+                                        ${!item.is_present ? `<br><strong>Last seen: ${new Date(item.last_seen).toLocaleTimeString()}</strong>` : ''}
                                     </div>
                                 </div>
                                 <button class="btn btn-danger" onclick="removeFromTracking('${item.id}')">
@@ -362,7 +519,6 @@
                     trackingBtn.disabled = false;
                 }
                 
-                // Update tracking status
                 isTracking = data.tracking_active;
                 document.getElementById('trackingBtn').textContent = 
                     isTracking ? 'Stop Tracking' : 'Start Tracking';
@@ -393,8 +549,6 @@
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             updateTrackingStatus();
-            
-            // Update status every 5 seconds
             setInterval(updateTrackingStatus, 5000);
         });
     </script>
