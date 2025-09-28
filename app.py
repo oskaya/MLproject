@@ -28,6 +28,38 @@ def index():
     return render_template('index.html')
 
 # WebSocket handlers for camera communication
+@socketio.on('camera_ready')
+def handle_camera_ready(data):
+    global camera_connected
+    camera_connected = True
+    print(f"📹 Camera ready: Index {data.get('camera_index')}, Resolution: {data.get('resolution')}")
+    emit('camera_status', {
+        'connected': True, 
+        'streaming': True,
+        'camera_info': data
+    }, broadcast=True)
+
+@socketio.on('camera_stopped')
+def handle_camera_stopped(data):
+    print("📹 Camera stopped")
+    emit('camera_status', {
+        'connected': camera_connected, 
+        'streaming': False
+    }, broadcast=True)
+
+@socketio.on('connect')
+def handle_web_client_connect():
+    print("🌐 Web client connected")
+    # Send current camera status to newly connected client
+    emit('camera_status', {
+        'connected': camera_connected,
+        'streaming': latest_frame is not None
+    })
+
+@socketio.on('disconnect')
+def handle_web_client_disconnect():
+    print("🌐 Web client disconnected")
+    
 @socketio.on('camera_error')
 def handle_camera_error(data):
     print(f"❌ Camera error: {data.get('message')}")

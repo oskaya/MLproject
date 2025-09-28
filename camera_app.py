@@ -102,7 +102,7 @@ class CameraApp:
         threading.Thread(target=self._capture_loop, daemon=True).start()
         print(f"✅ Camera started successfully on index {camera_index}")
         
-        # Notify web app that camera is ready
+        # THIS IS CRUCIAL - Notify web app that camera is ready
         self.sio.emit('camera_ready', {
             'camera_index': camera_index,
             'resolution': f"{test_frame.shape[1]}x{test_frame.shape[0]}"
