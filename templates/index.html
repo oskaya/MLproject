@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Object Tracking System</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .panel { background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 5px; }
+        .btn { padding: 10px 20px; margin: 5px; border: none; border-radius: 3px; cursor: pointer; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 3px; }
+        .status-connected { background: #d4edda; color: #155724; }
+        .status-disconnected { background: #f8d7da; color: #721c24; }
+        .detection-item, .tracked-item { 
+            background: white; 
+            padding: 15px; 
+            margin: 10px 0; 
+            border-radius: 5px; 
+            border: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .item-info { flex: 1; }
+        .item-label { font-weight: bold; font-size: 1.1em; }
+        .item-details { color: #666; font-size: 0.9em; margin-top: 5px; }
+        .confidence { background: #e3f2fd; color: #1976d2; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; }
+        
+        /* Image display styles */
+        .image-container {
+            position: relative;
+            display: inline-block;
+            margin: 10px 0;
+        }
+        .detection-image {
+            max-width: 100%;
+            height: auto;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+        }
+        .bbox {
+            position: absolute;
+            border: 2px solid #ff0000;
+            background: rgba(255, 0, 0, 0.1);
+            pointer-events: none;
+        }
+        .bbox-label {
+            position: absolute;
+            background: #ff0000;
+            color: white;
+            padding: 2px 6px;
+            font-size: 12px;
+            font-weight: bold;
+            top: -20px;
+            left: 0;
+            border-radius: 3px;
+            white-space: nowrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 Object Tracking System</h1>
+        
+        <div id="cameraStatus" class="status status-disconnected">
+            📷 Camera: Disconnected
+        </div>
+        
+        <div class="panel">
+            <h2>Camera Controls</h2>
+            <button id="startBtn" class="btn btn-success" onclick="startCamera()" disabled>Start Camera</button>
+            <button id="stopBtn" class="btn btn-danger" onclick="stopCamera()" disabled>Stop Camera</button>
+            <button id="detectBtn" class="btn btn-primary" onclick="detectObjects()" disabled>Detect Objects</button>
+        </div>
+        
+        <div class="panel">
+            <h2>Detection Results</h2>
+            <div id="detections">No detections yet. Click "Detect Objects" to analyze current frame.</div>
+        </div>
+        
+        <div class="panel">
+            <h2>Tracking</h2>
+            <button id="trackingBtn" class="btn btn-success" onclick="toggleTracking()" disabled>Start Tracking</button>
+            <button class="btn btn-danger" onclick="clearTracking()">Clear All</button>
+            <div id="trackedItems">No items being tracked.</div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let isTracking = false;
+        let currentImage = null;
+
+        // Socket events
+        socket.on('camera_status', function(data) {
+            updateCameraStatus(data.connected, data.streaming);
+            if (data.error) {
+                alert('Camera Error: ' + data.error);
+            }
+        });
+
+        // Update camera status
+        function updateCameraStatus(connected, streaming = false) {
+            const statusEl = document.getElementById('cameraStatus');
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+            const detectBtn = document.getElementById('detectBtn');
+            
+            if (connected && streaming) {
+                statusEl.className = 'status status-connected';
+                statusEl.textContent = '📷 Camera: Connected & Streaming';
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                detectBtn.disabled = false;
+            } else if (connected) {
+                statusEl.className = 'status status-connected';
+                statusEl.textContent = '📷 Camera: Connected (Not Streaming)';
+                startBtn.disabled = false;
+                stopBtn.disabled = false;
+                detectBtn.disabled = true;
+            } else {
+                statusEl.className = 'status status-disconnected';
+                statusEl.textContent = '📷 Camera: Disconnected';
+                startBtn.disabled = true;
+                stopBtn.disabled = true;
+                detectBtn.disabled = true;
+            }
+        }
+
+        // Camera functions
+        async function startCamera() {
+            try {
+                const response = await fetch('/api/camera/start', { method: 'POST' });
+                const data = await response.json();
+                if (!data.success) alert(data.message);
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function stopCamera() {
+            try {
+                const response = await fetch('/api/camera/stop', { method: 'POST' });
+                const data = await response.json();
+                if (!data.success) alert(data.message);
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // Detection function
+        async function detectObjects() {
+            const detectBtn = document.getElementById('detectBtn');
+            const originalText = detectBtn.textContent;
+            
+            try {
+                detectBtn.textContent = 'Analyzing...';
+                detectBtn.disabled = true;
+                
+                const response = await fetch('/api/detect', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentImage = data.image;
+                    displayDetections(data.detections, data.image);
+                } else {
+                    alert(data.message);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                detectBtn.textContent = originalText;
+                detectBtn.disabled = false;
+            }
+        }
+
+        // Display detections with image and bounding boxes
+        function displayDetections(detections, imageData) {
+            const container = document.getElementById('detections');
+            
+            if (!detections || detections.length === 0) {
+                container.innerHTML = `
+                    <div class="image-container">
+                        <img src="data:image/jpeg;base64,${imageData}" class="detection-image" />
+                    </div>
+                    <p>No objects detected in current frame.</p>
+                `;
+                return;
+            }
+            
+            // Create image with bounding boxes
+            const imageHtml = `
+                <div class="image-container" id="imageContainer">
+                    <img src="data:image/jpeg;base64,${imageData}" class="detection-image" 
+                         onload="drawBoundingBoxes(${JSON.stringify(detections).replace(/"/g, '&quot;')})" />
+                </div>
+            `;
+            
+            // Create detection list
+            const detectionsHtml = detections.map(detection => `
+                <div class="detection-item">
+                    <div class="item-info">
+                        <div class="item-label">
+                            ${detection.label}
+                            <span class="confidence">${(detection.confidence * 100).toFixed(1)}%</span>
+                        </div>
+                        <div class="item-details">
+                            Class ID: ${detection.class_id} • 
+                            BBox: (${detection.bbox.x1.toFixed(0)}, ${detection.bbox.y1.toFixed(0)}) - 
+                            (${detection.bbox.x2.toFixed(0)}, ${detection.bbox.y2.toFixed(0)})
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="addToTracking(${JSON.stringify(detection).replace(/"/g, '&quot;')})">
+                        Track This
+                    </button>
+                </div>
+            `).join('');
+            
+            container.innerHTML = `
+                ${imageHtml}
+                <p><strong>${detections.length} objects detected:</strong></p>
+                ${detectionsHtml}
+            `;
+        }
+
+        // Draw bounding boxes on the image
+        function drawBoundingBoxes(detections) {
+            const imageContainer = document.getElementById('imageContainer');
+            const image = imageContainer.querySelector('.detection-image');
+            
+            // Remove existing bounding boxes
+            const existingBoxes = imageContainer.querySelectorAll('.bbox');
+            existingBoxes.forEach(box => box.remove());
+            
+            // Wait for image to load
+            if (image.complete) {
+                addBoundingBoxes(detections, imageContainer, image);
+            } else {
+                image.onload = () => addBoundingBoxes(detections, imageContainer, image);
+            }
+        }
+
+        function addBoundingBoxes(detections, container, image) {
+            const imageRect = image.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+            
+            // Get scale factors
+            const scaleX = image.offsetWidth / 640; // Assuming 640px original width
+            const scaleY = image.offsetHeight / 480; // Assuming 480px original height
+            
+            detections.forEach((detection, index) => {
+                const bbox = detection.bbox;
+                
+                // Create bounding box element
+                const boxDiv = document.createElement('div');
+                boxDiv.className = 'bbox';
+                boxDiv.style.left = (bbox.x1 * scaleX) + 'px';
+                boxDiv.style.top = (bbox.y1 * scaleY) + 'px';
+                boxDiv.style.width = ((bbox.x2 - bbox.x1) * scaleX) + 'px';
+                boxDiv.style.height = ((bbox.y2 - bbox.y1) * scaleY) + 'px';
+                
+                // Create label
+                const labelDiv = document.createElement('div');
+                labelDiv.className = 'bbox-label';
+                labelDiv.textContent = `${detection.label} (${(detection.confidence * 100).toFixed(1)}%)`;
+                
+                boxDiv.appendChild(labelDiv);
+                container.appendChild(boxDiv);
+            });
+        }
+
+        // Tracking functions (keeping existing code)
+        async function addToTracking(detection) {
+            try {
+                const response = await fetch('/api/tracking/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ detection })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    updateTrackingStatus();
+                } else {
+                    alert(data.message);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function toggleTracking() {
+            try {
+                const action = isTracking ? 'stop' : 'start';
+                const response = await fetch(`/api/tracking/${action}`, { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    isTracking = !isTracking;
+                    document.getElementById('trackingBtn').textContent = 
+                        isTracking ? 'Stop Tracking' : 'Start Tracking';
+                    document.getElementById('trackingBtn').className = 
+                        `btn ${isTracking ? 'btn-danger' : 'btn-success'}`;
+                } else {
+                    alert(data.message);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function clearTracking() {
+            if (confirm('Clear all tracked items?')) {
+                try {
+                    const response = await fetch('/api/tracking/clear', { method: 'POST' });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        isTracking = false;
+                        updateTrackingStatus();
+                    }
+                } catch (error) {
+                    alert('Error: ' + error.message);
+                }
+            }
+        }
+
+        async function updateTrackingStatus() {
+            try {
+                const response = await fetch('/api/tracking/status');
+                const data = await response.json();
+                
+                const container = document.getElementById('trackedItems');
+                const trackingBtn = document.getElementById('trackingBtn');
+                
+                if (data.tracked_items.length === 0) {
+                    container.innerHTML = 'No items being tracked.';
+                    trackingBtn.disabled = true;
+                } else {
+                    container.innerHTML = `
+                        <p><strong>${data.count} items being tracked:</strong></p>
+                        ${data.tracked_items.map(item => `
+                            <div class="tracked-item">
+                                <div class="item-info">
+                                    <div class="item-label">${item.label}</div>
+                                    <div class="item-details">
+                                        Added: ${new Date(item.added_at).toLocaleTimeString()} • 
+                                        Confidence: ${(item.confidence * 100).toFixed(1)}% • 
+                                        Class ID: ${item.class_id}
+                                    </div>
+                                </div>
+                                <button class="btn btn-danger" onclick="removeFromTracking('${item.id}')">
+                                    Remove
+                                </button>
+                            </div>
+                        `).join('')}
+                    `;
+                    trackingBtn.disabled = false;
+                }
+                
+                // Update tracking status
+                isTracking = data.tracking_active;
+                document.getElementById('trackingBtn').textContent = 
+                    isTracking ? 'Stop Tracking' : 'Start Tracking';
+                document.getElementById('trackingBtn').className = 
+                    `btn ${isTracking ? 'btn-danger' : 'btn-success'}`;
+                    
+            } catch (error) {
+                console.error('Error updating tracking status:', error);
+            }
+        }
+
+        async function removeFromTracking(itemId) {
+            try {
+                const response = await fetch('/api/tracking/remove', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item_id: itemId })
+                });
+                
+                if (response.ok) {
+                    updateTrackingStatus();
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            updateTrackingStatus();
+            
+            // Update status every 5 seconds
+            setInterval(updateTrackingStatus, 5000);
+        });
+    </script>
+</body>
+</html>

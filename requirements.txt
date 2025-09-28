@@ -1,0 +1,8 @@
+Flask
+Flask-CORS
+opencv-python
+requests
+Pillow
+numpy
+flask-socketio
+python-socketio[client]
