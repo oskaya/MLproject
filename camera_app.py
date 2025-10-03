@@ -6,6 +6,7 @@ import socketio
 import base64
 import time
 import threading
+from config import Config
 
 class CameraApp:
     def __init__(self, webapp_url="http://localhost:5000"):
@@ -13,21 +14,47 @@ class CameraApp:
         self.sio = socketio.Client()
         self.camera = None
         self.is_running = False
-        self.preferred_cameras = [2, 0, 1, 3, 4]  # External camera first
+        self.camera_index = Config.CAMERA_INDEX  # Use configured camera index
+        self.enable_auto_detection = Config.ENABLE_AUTO_CAMERA_DETECTION
+        self.preferred_cameras = Config.PREFERRED_CAMERAS  # Fallback cameras
         self.setup_events()
         
     def find_available_camera(self):
-        """Find the first available camera"""
-        for cam_index in self.preferred_cameras:
-            print(f"🔍 Testing camera index {cam_index}...")
-            cap = cv2.VideoCapture(cam_index)
-            if cap.isOpened():
-                ret, frame = cap.read()
-                if ret:
-                    print(f"✅ Found working camera at index {cam_index}")
-                    cap.release()
-                    return cam_index
+        """Find available camera - try configured index first, then auto-detect if enabled"""
+        
+        # First, try the manually configured camera index
+        print(f"🔍 Testing configured camera index {self.camera_index}...")
+        cap = cv2.VideoCapture(self.camera_index)
+        if cap.isOpened():
+            ret, frame = cap.read()
+            if ret:
+                print(f"✅ Found working camera at configured index {self.camera_index}")
                 cap.release()
+                return self.camera_index
+            cap.release()
+        
+        print(f"❌ Configured camera index {self.camera_index} not available")
+        
+        # If configured camera fails and auto-detection is enabled, try fallback cameras
+        if self.enable_auto_detection:
+            print("🔄 Attempting auto-detection with fallback cameras...")
+            for cam_index in self.preferred_cameras:
+                if cam_index == self.camera_index:
+                    continue  # Skip already tested camera index
+                    
+                print(f"🔍 Testing fallback camera index {cam_index}...")
+                cap = cv2.VideoCapture(cam_index)
+                if cap.isOpened():
+                    ret, frame = cap.read()
+                    if ret:
+                        print(f"✅ Found working fallback camera at index {cam_index}")
+                        cap.release()
+                        return cam_index
+                    cap.release()
+            print("❌ No fallback cameras available")
+        else:
+            print("⚠️ Auto-detection disabled - only using configured camera index")
+            
         return None
         
     def setup_events(self):
@@ -85,10 +112,10 @@ class CameraApp:
             self.sio.emit('camera_error', {'message': f'Failed to open camera {camera_index}'})
             return
             
-        # Set camera properties
-        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        self.camera.set(cv2.CAP_PROP_FPS, 30)
+        # Set camera properties from config
+        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, Config.DEFAULT_CAMERA_WIDTH)
+        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, Config.DEFAULT_CAMERA_HEIGHT)
+        self.camera.set(cv2.CAP_PROP_FPS, Config.DEFAULT_CAMERA_FPS)
         
         # Test if we can read a frame
         ret, test_frame = self.camera.read()
@@ -131,11 +158,12 @@ class CameraApp:
             ret, frame = self.camera.read()
             if ret:
                 frame_count += 1
-                # Resize for better performance
-                frame = cv2.resize(frame, (640, 480))
+                # Resize for better performance using config values
+                frame = cv2.resize(frame, (Config.DEFAULT_CAMERA_WIDTH, Config.DEFAULT_CAMERA_HEIGHT))
                 
-                # Encode to base64
-                _, buffer = cv2.imencode('.jpg', frame)
+                # Encode to base64 with config quality
+                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), Config.JPEG_QUALITY]
+                _, buffer = cv2.imencode('.jpg', frame, encode_param)
                 frame_b64 = base64.b64encode(buffer).decode('utf-8')
                 
                 # Send to web app
@@ -156,7 +184,7 @@ class CameraApp:
                 print("⚠️  Failed to read frame")
                 time.sleep(0.1)
                 
-            time.sleep(0.033)  # ~30 FPS
+            time.sleep(1.0 / Config.STREAM_FPS)  # Use config FPS
     
     def run(self):
         if self.connect():

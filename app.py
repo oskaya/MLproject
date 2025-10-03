@@ -11,12 +11,13 @@ import io
 import threading
 from datetime import datetime, timedelta
 from typing import List, Dict
+from config import Config
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins=Config.SOCKETIO_CORS_ALLOWED_ORIGINS)
 
 # Configuration
-ML_API_URL = "http://localhost:8000/predict"
+ML_API_URL = Config.ML_API_URL
 
 # Global state
 camera_connected = False
@@ -25,7 +26,7 @@ latest_frame = None
 latest_detections = []
 tracked_items = []
 tracking_active = False
-tracking_interval = 5  # Default 5 seconds
+tracking_interval = Config.DEFAULT_TRACKING_INTERVAL  # Use config default
 alarm_active = False
 missing_items = []
 tracking_thread = None
@@ -39,10 +40,10 @@ def index():
 # Fix the socketio.emit calls - remove broadcast=True parameter
 
 def auto_detect_objects():
-    """Automatically detect objects every 5 seconds when camera is streaming"""
+    """Automatically detect objects every few seconds when camera is streaming"""
     global latest_frame, latest_detections, auto_detection_active
     
-    print("🤖 Started automatic object detection (every 5 seconds)")
+    print(f"🤖 Started automatic object detection (every {Config.AUTO_DETECTION_INTERVAL} seconds)")
     
     while auto_detection_active and camera_streaming:
         if latest_frame:
@@ -53,8 +54,8 @@ def auto_detect_objects():
                 image_bytes = base64.b64decode(latest_frame)
                 files = {'file': ('frame.jpg', io.BytesIO(image_bytes), 'image/jpeg')}
                 
-                # Send to ML API
-                response = requests.post(ML_API_URL, files=files, timeout=10)
+                # Send to ML API with config timeout
+                response = requests.post(ML_API_URL, files=files, timeout=Config.ML_API_TIMEOUT)
                 
                 if response.status_code == 200:
                     ml_result = response.json()
@@ -85,7 +86,7 @@ def auto_detect_objects():
             except Exception as e:
                 print(f"❌ Auto-detection error: {e}")
         
-        time.sleep(5)  # Wait 5 seconds
+        time.sleep(Config.AUTO_DETECTION_INTERVAL)  # Use config interval
     
     print("🛑 Auto-detection stopped")
 
@@ -111,8 +112,8 @@ def check_tracked_items():
                 # Look for similar objects in current detections
                 for detection in latest_detections:
                     if detection['label'] == tracked_item['label']:
-                        # Simple matching by label and confidence threshold
-                        if detection['confidence'] > 0.5:
+                        # Use config confidence threshold
+                        if detection['confidence'] > Config.DETECTION_CONFIDENCE_THRESHOLD:
                             item_found = True
                             tracked_item['last_seen'] = datetime.now().isoformat()
                             tracked_item['is_present'] = True
@@ -120,9 +121,10 @@ def check_tracked_items():
                 
                 if not item_found:
                     tracked_item['is_present'] = False
-                    # Check if missing for more than 2 intervals
+                    # Check if missing for more than threshold intervals
                     last_seen = datetime.fromisoformat(tracked_item['last_seen'])
-                    if (datetime.now() - last_seen).total_seconds() > (tracking_interval * 2):
+                    threshold_seconds = tracking_interval * Config.MISSING_ITEM_THRESHOLD_MULTIPLIER
+                    if (datetime.now() - last_seen).total_seconds() > threshold_seconds:
                         current_missing.append(tracked_item)
                         print(f"❌ Missing: {tracked_item['label']}")
                     else:
@@ -370,8 +372,8 @@ def set_tracking_interval():
     data = request.get_json()
     new_interval = data.get('interval')
     
-    if not new_interval or not isinstance(new_interval, int) or new_interval < 1 or new_interval > 60:
-        return jsonify({'success': False, 'message': 'Interval must be between 1-60 seconds'})
+    if not new_interval or not isinstance(new_interval, int) or new_interval < Config.MIN_TRACKING_INTERVAL or new_interval > Config.MAX_TRACKING_INTERVAL:
+        return jsonify({'success': False, 'message': f'Interval must be between {Config.MIN_TRACKING_INTERVAL}-{Config.MAX_TRACKING_INTERVAL} seconds'})
     
     tracking_interval = new_interval
     print(f"⏱️ Tracking interval changed to {tracking_interval} seconds")
@@ -397,4 +399,6 @@ def acknowledge_alarm():
 if __name__ == '__main__':
     print("Starting Object Tracking Web App...")
     print(f"ML API URL: {ML_API_URL}")
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    print(f"Camera Index: {Config.CAMERA_INDEX}")
+    print(f"Auto Camera Detection: {'Enabled' if Config.ENABLE_AUTO_CAMERA_DETECTION else 'Disabled'}")
+    socketio.run(app, host=Config.FLASK_HOST, port=Config.FLASK_PORT, debug=Config.FLASK_DEBUG)

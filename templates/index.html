@@ -235,6 +235,7 @@
 
         // Socket events for camera status
         socket.on('camera_status', function(data) {
+            console.log('📹 Camera status update:', data);
             updateCameraStatus(data.connected, data.streaming);
             if (data.error) {
                 alert('Camera Error: ' + data.error);
@@ -243,18 +244,25 @@
 
         // Live frame updates
         socket.on('live_frame', function(data) {
+            console.log('📺 Received live frame');
             const liveFrame = document.getElementById('liveFrame');
             const noCamera = document.getElementById('noCamera');
             const detectionInfo = document.getElementById('detectionInfo');
             
-            liveFrame.src = 'data:image/jpeg;base64,' + data.frame;
-            liveFrame.style.display = 'block';
-            noCamera.style.display = 'none';
-            detectionInfo.style.display = 'block';
+            if (data.frame) {
+                liveFrame.src = 'data:image/jpeg;base64,' + data.frame;
+                liveFrame.style.display = 'block';
+                noCamera.style.display = 'none';
+                detectionInfo.style.display = 'block';
+                
+                // Update stream status
+                document.getElementById('detectionStatus').textContent = 'Live Stream';
+            }
         });
 
         // Auto-detection results every 5 seconds
         socket.on('auto_detection_result', function(data) {
+            console.log('🤖 Auto-detection result:', data);
             lastDetections = data.detections;
             updateDetectionOverlays(data.detections);
             updateCurrentDetections(data.detections);
@@ -383,6 +391,27 @@
             }
         }
 
+        // Camera functions
+        async function startCamera() {
+            try {
+                const response = await fetch('/api/camera/start', { method: 'POST' });
+                const data = await response.json();
+                if (!data.success) alert(data.message);
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function stopCamera() {
+            try {
+                const response = await fetch('/api/camera/stop', { method: 'POST' });
+                const data = await response.json();
+                if (!data.success) alert(data.message);
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
         // Interval control functions
         async function changeInterval(delta) {
             const newInterval = trackingInterval + delta;
@@ -407,82 +436,6 @@
                 }
             } catch (error) {
                 alert('Error: ' + error.message);
-            }
-        }
-
-        // Camera functions
-        async function startCamera() {
-            try {
-                const response = await fetch('/api/camera/start', { method: 'POST' });
-                const data = await response.json();
-                if (!data.success) alert(data.message);
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        }
-
-        async function stopCamera() {
-            try {
-                const response = await fetch('/api/camera/stop', { method: 'POST' });
-                const data = await response.json();
-                if (!data.success) alert(data.message);
-            } catch (error) {
-                alert('Error: ' + error.message);
-            }
-        }
-
-        // Alarm functions
-        function showAlarm(missingItems) {
-            const alarmPanel = document.getElementById('alarmPanel');
-            const missingList = document.getElementById('missingItemsList');
-            
-            alarmPanel.className = 'alarm-panel alarm-active';
-            
-            missingList.innerHTML = missingItems.map(item => `
-                <div class="missing-item">
-                    <strong>${item.label}</strong> - Last seen: ${new Date(item.last_seen).toLocaleTimeString()}
-                </div>
-            `).join('');
-        }
-
-        function hideAlarm() {
-            const alarmPanel = document.getElementById('alarmPanel');
-            alarmPanel.className = 'alarm-panel';
-        }
-
-        async function acknowledgeAlarm() {
-            try {
-                const response = await fetch('/api/alarm/acknowledge', { method: 'POST' });
-                const data = await response.json();
-                
-                if (data.success) {
-                    hideAlarm();
-                }
-            } catch (error) {
-                console.error('Error acknowledging alarm:', error);
-            }
-        }
-
-        function playAlarmSound() {
-            try {
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioContext.createOscillator();
-                const gainNode = audioContext.createGain();
-                
-                oscillator.connect(gainNode);
-                gainNode.connect(audioContext.destination);
-                
-                oscillator.frequency.value = 800;
-                oscillator.type = 'square';
-                
-                gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-                gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
-                
-                oscillator.start(audioContext.currentTime);
-                oscillator.stop(audioContext.currentTime + 0.3);
-            } catch (error) {
-                console.log('Audio not available');
             }
         }
 
@@ -613,10 +566,74 @@
             }
         }
 
+        // Alarm functions
+        function showAlarm(missingItems) {
+            const alarmPanel = document.getElementById('alarmPanel');
+            const missingList = document.getElementById('missingItemsList');
+            
+            alarmPanel.className = 'alarm-panel alarm-active';
+            
+            missingList.innerHTML = missingItems.map(item => `
+                <div class="missing-item">
+                    <strong>${item.label}</strong> - Last seen: ${new Date(item.last_seen).toLocaleTimeString()}
+                </div>
+            `).join('');
+        }
+
+        function hideAlarm() {
+            const alarmPanel = document.getElementById('alarmPanel');
+            alarmPanel.className = 'alarm-panel';
+        }
+
+        async function acknowledgeAlarm() {
+            try {
+                const response = await fetch('/api/alarm/acknowledge', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.success) {
+                    hideAlarm();
+                }
+            } catch (error) {
+                console.error('Error acknowledging alarm:', error);
+            }
+        }
+
+        function playAlarmSound() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800;
+                oscillator.type = 'square';
+                
+                gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.3);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.3);
+            } catch (error) {
+                console.log('Audio not available');
+            }
+        }
+
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             updateTrackingStatus();
             setInterval(updateTrackingStatus, 5000);
+        });
+
+        // Connection debug
+        socket.on('connect', function() {
+            console.log('🔌 Connected to web app');
+        });
+
+        socket.on('disconnect', function() {
+            console.log('🔌 Disconnected from web app');
         });
     </script>
 </body>
