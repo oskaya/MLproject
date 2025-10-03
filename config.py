@@ -30,7 +30,7 @@ class Config:
     
     # Flask Configuration
     FLASK_HOST = '0.0.0.0'
-    FLASK_PORT = 5000
+    FLASK_PORT = 5000  # Use different port for testing
     FLASK_DEBUG = True
     
     # SocketIO Configuration

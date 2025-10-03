@@ -1,0 +1,259 @@
+/* Object Tracking System Styles */
+
+/* Base styles */
+body { 
+    font-family: Arial, sans-serif; 
+    margin: 20px; 
+}
+
+.container { 
+    max-width: 1400px; 
+    margin: 0 auto; 
+}
+
+.panel { 
+    background: #f5f5f5; 
+    padding: 20px; 
+    margin: 20px 0; 
+    border-radius: 5px; 
+}
+
+/* Button styles */
+.btn { 
+    padding: 10px 20px; 
+    margin: 5px; 
+    border: none; 
+    border-radius: 3px; 
+    cursor: pointer; 
+}
+
+.btn-primary { 
+    background: #007bff; 
+    color: white; 
+}
+
+.btn-success { 
+    background: #28a745; 
+    color: white; 
+}
+
+.btn-danger { 
+    background: #dc3545; 
+    color: white; 
+}
+
+.btn-warning { 
+    background: #ffc107; 
+    color: #212529; 
+}
+
+.btn-small { 
+    padding: 5px 10px; 
+    font-size: 0.9em; 
+}
+
+.btn:disabled { 
+    opacity: 0.5; 
+    cursor: not-allowed; 
+}
+
+/* Status styles */
+.status { 
+    padding: 10px; 
+    margin: 10px 0; 
+    border-radius: 3px; 
+}
+
+.status-connected { 
+    background: #d4edda; 
+    color: #155724; 
+}
+
+.status-disconnected { 
+    background: #f8d7da; 
+    color: #721c24; 
+}
+
+/* Live Video Stream */
+.video-container {
+    position: relative;
+    display: inline-block;
+    margin: 10px 0;
+    border: 2px solid #ddd;
+    border-radius: 5px;
+    background: #000;
+}
+
+.live-frame {
+    max-width: 100%;
+    height: auto;
+    display: block;
+}
+
+.video-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+/* Detection overlays */
+.detection-bbox {
+    position: absolute;
+    border: 3px solid #00ff00;
+    background: rgba(0, 255, 0, 0.1);
+    pointer-events: none;
+}
+
+.detection-label {
+    position: absolute;
+    background: #00ff00;
+    color: black;
+    padding: 2px 6px;
+    font-size: 12px;
+    font-weight: bold;
+    top: -22px;
+    left: 0;
+    border-radius: 3px;
+    white-space: nowrap;
+}
+
+/* Item styles */
+.detection-item, .tracked-item { 
+    background: white; 
+    padding: 15px; 
+    margin: 10px 0; 
+    border-radius: 5px; 
+    border: 1px solid #ddd;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.item-info { 
+    flex: 1; 
+}
+
+.item-label { 
+    font-weight: bold; 
+    font-size: 1.1em; 
+}
+
+.item-details { 
+    color: #666; 
+    font-size: 0.9em; 
+    margin-top: 5px; 
+}
+
+.confidence { 
+    background: #e3f2fd; 
+    color: #1976d2; 
+    padding: 2px 8px; 
+    border-radius: 12px; 
+    font-size: 0.8em; 
+}
+
+/* Interval controls */
+.interval-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 10px 0;
+}
+
+.interval-display {
+    background: white;
+    padding: 8px 15px;
+    border: 2px solid #007bff;
+    border-radius: 5px;
+    font-weight: bold;
+    font-size: 1.1em;
+    color: #007bff;
+}
+
+/* Alarm styles */
+.alarm-panel {
+    background: #f8d7da;
+    border: 2px solid #dc3545;
+    color: #721c24;
+    padding: 20px;
+    margin: 20px 0;
+    border-radius: 5px;
+    display: none;
+}
+
+.alarm-active {
+    display: block !important;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0.3; }
+}
+
+.alarm-header {
+    font-size: 1.2em;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.missing-item {
+    background: white;
+    padding: 10px;
+    margin: 5px 0;
+    border-radius: 3px;
+    border-left: 4px solid #dc3545;
+}
+
+/* Layout */
+.main-content {
+    display: flex;
+    gap: 20px;
+}
+
+.left-column {
+    flex: 2;
+}
+
+.right-column {
+    flex: 1;
+}
+
+/* Detection info overlay */
+.detection-info {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 0.9em;
+}
+
+/* No camera placeholder */
+.no-camera {
+    background: #333;
+    color: white;
+    text-align: center;
+    padding: 40px;
+    border-radius: 5px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .main-content {
+        flex-direction: column;
+    }
+    
+    .container {
+        margin: 10px;
+    }
+    
+    body {
+        margin: 10px;
+    }
+}
