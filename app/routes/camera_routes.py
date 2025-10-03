@@ -3,6 +3,7 @@ Camera Routes
 API endpoints for camera control
 """
 from flask import Blueprint, jsonify
+from datetime import datetime
 import app.state as state
 from app.services import ml_service
 from app import socketio
@@ -24,6 +25,14 @@ def stop_camera():
     
     # Stop auto-detection and tracking when camera stops
     ml_service.stop_auto_detection()
+    
+    # If alarm was active, notify frontend that it's cleared due to camera stop
+    if state.alarm_active:
+        socketio.emit('alarm_cleared', {
+            'reason': 'camera_stopped',
+            'timestamp': datetime.now().isoformat()
+        })
+    
     state.reset_tracking_state()
     
     socketio.emit('camera_command', {'action': 'stop'})

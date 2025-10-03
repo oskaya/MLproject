@@ -18,6 +18,10 @@ def add_to_tracking(detection):
     Returns:
         Created tracking item
     """
+    # Check if already tracked to prevent duplicates
+    if state.is_object_already_tracked(detection.get('label'), detection.get('class_id')):
+        return None
+        
     tracking_item = {
         'id': f"track_{len(state.tracked_items)}_{int(time.time())}",
         'label': detection.get('label', 'unknown'),
@@ -26,7 +30,9 @@ def add_to_tracking(detection):
         'bbox': detection.get('bbox', {}),
         'added_at': datetime.now().isoformat(),
         'last_seen': datetime.now().isoformat(),
-        'is_present': True
+        'is_present': True,
+        'alarm_enabled': True,  # Enable alarm by default
+        'missing_count': 0  # Initialize missing count for hysteresis
     }
     
     state.tracked_items.append(tracking_item)
@@ -42,6 +48,32 @@ def clear_tracking():
     state.tracking_active = False
     state.alarm_active = False
 
+def refresh_detection_tracking_status(socketio):
+    """
+    Refresh the tracking status of current detections and emit update
+    
+    Args:
+        socketio: SocketIO instance for emitting events
+    """
+    if state.latest_detections:
+        # Update tracking status for all current detections
+        enhanced_detections = []
+        for detection in state.latest_detections:
+            enhanced_detection = detection.copy()
+            enhanced_detection['is_tracked'] = state.is_object_already_tracked(
+                detection['label'], 
+                detection.get('class_id')
+            )
+            enhanced_detections.append(enhanced_detection)
+        
+        state.latest_detections = enhanced_detections
+        
+        # Emit updated detections to frontend
+        socketio.emit('detection_tracking_update', {
+            'detections': enhanced_detections,
+            'timestamp': datetime.now().isoformat()
+        })
+
 def check_tracked_items(socketio):
     """
     Continuously check if tracked items are still present
@@ -50,9 +82,13 @@ def check_tracked_items(socketio):
         socketio: SocketIO instance for emitting events
     """
     print(f"🔍 Started tracking monitor (checking every {state.tracking_interval}s)")
+    print(f"📋 Debug: tracking_active={state.tracking_active}, tracked_items={len(state.tracked_items)}")
     
     while state.tracking_active:
-        if not state.latest_detections or not state.tracked_items:
+        print(f"🔄 Loop iteration: tracking_active={state.tracking_active}, latest_detections={len(state.latest_detections) if state.latest_detections else 0}, tracked_items={len(state.tracked_items)}")
+        
+        if not state.tracked_items:
+            print(f"⏳ No items to track - skipping")
             time.sleep(state.tracking_interval)
             continue
             
@@ -64,28 +100,47 @@ def check_tracked_items(socketio):
             for tracked_item in state.tracked_items:
                 item_found = False
                 
-                # Look for similar objects in current detections
-                for detection in state.latest_detections:
-                    if detection['label'] == tracked_item['label']:
-                        # Use config confidence threshold
-                        if detection['confidence'] > Config.DETECTION_CONFIDENCE_THRESHOLD:
-                            item_found = True
-                            tracked_item['last_seen'] = datetime.now().isoformat()
-                            tracked_item['is_present'] = True
-                            break
+                # Look for similar objects in current detections (if any)
+                if state.latest_detections:
+                    for detection in state.latest_detections:
+                        if detection['label'] == tracked_item['label']:
+                            # Use lower threshold for tracking (more lenient for already tracked items)
+                            tracking_threshold = 0.3  # Lower than detection threshold for better continuity
+                            if detection['confidence'] > tracking_threshold:
+                                item_found = True
+                                tracked_item['last_seen'] = datetime.now().isoformat()
+                                tracked_item['is_present'] = True
+                                print(f"✅ Found: {tracked_item['label']} (confidence: {detection['confidence']:.2f}, threshold: {tracking_threshold})")
+                                break
                 
                 if not item_found:
-                    tracked_item['is_present'] = False
-                    # Check if missing for more than threshold intervals
-                    last_seen = datetime.fromisoformat(tracked_item['last_seen'])
-                    threshold_seconds = state.tracking_interval * Config.MISSING_ITEM_THRESHOLD_MULTIPLIER
-                    if (datetime.now() - last_seen).total_seconds() > threshold_seconds:
-                        current_missing.append(tracked_item)
-                        print(f"❌ Missing: {tracked_item['label']}")
+                    # Increment missing count for hysteresis
+                    missing_count = tracked_item.get('missing_count', 0) + 1
+                    tracked_item['missing_count'] = missing_count
+                    
+                    # Only mark as missing after multiple consecutive failures
+                    if missing_count >= 2:  # Require 2 consecutive misses before marking as not present
+                        tracked_item['is_present'] = False
+                        print(f"❌ {tracked_item['label']} confirmed missing after {missing_count} checks")
+                        
+                        # Check if missing for more than threshold intervals AND alarm is enabled
+                        if tracked_item.get('alarm_enabled', True):
+                            last_seen = datetime.fromisoformat(tracked_item['last_seen'])
+                            threshold_seconds = state.tracking_interval * Config.MISSING_ITEM_THRESHOLD_MULTIPLIER
+                            time_missing = (datetime.now() - last_seen).total_seconds()
+                            print(f"⏰ {tracked_item['label']} missing for {time_missing:.1f}s (threshold: {threshold_seconds}s)")
+                            if time_missing > threshold_seconds:
+                                current_missing.append(tracked_item)
+                                print(f"❌ Missing: {tracked_item['label']}")
+                            else:
+                                print(f"⚠️ Temporary loss: {tracked_item['label']}")
+                        else:
+                            print(f"🔇 {tracked_item['label']} missing but alarm disabled")
                     else:
-                        print(f"⚠️ Temporary loss: {tracked_item['label']}")
+                        print(f"🔍 {tracked_item['label']} not found (attempt {missing_count}/2)")
                 else:
-                    print(f"✅ Found: {tracked_item['label']}")
+                    # Item was found, reset missing count and already logged above
+                    tracked_item['missing_count'] = 0
             
             # Update missing items
             state.missing_items = current_missing
@@ -147,6 +202,23 @@ def set_tracking_interval(new_interval):
     print(f"⏱️ Tracking interval changed to {state.tracking_interval} seconds")
     return True, f'Tracking interval set to {state.tracking_interval} seconds'
 
-def acknowledge_alarm():
-    """Acknowledge the alarm (silence it but keep tracking)"""
+def acknowledge_alarm(socketio):
+    """Acknowledge the alarm (disable alarms for currently missing items)"""
+    # Disable alarms for all currently missing items
+    for item in state.missing_items:
+        # Find the item in tracked_items and disable its alarm
+        for tracked_item in state.tracked_items:
+            if tracked_item['id'] == item['id']:
+                tracked_item['alarm_enabled'] = False
+                print(f"🔇 Disabled alarm for: {tracked_item['label']}")
+                break
+    
     state.alarm_active = False
+    state.missing_items = []  # Clear missing items list
+    
+    # Notify frontend that alarm was acknowledged
+    socketio.emit('alarm_acknowledged', {
+        'timestamp': datetime.now().isoformat()
+    })
+    
+    print("✅ Alarm acknowledged - disabled alarms for missing items")

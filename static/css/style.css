@@ -132,6 +132,11 @@ body {
     align-items: center;
 }
 
+.detection-item.already-tracked {
+    background: #f8f9fa;
+    border-color: #28a745;
+}
+
 .item-info { 
     flex: 1; 
 }
@@ -153,6 +158,15 @@ body {
     padding: 2px 8px; 
     border-radius: 12px; 
     font-size: 0.8em; 
+}
+
+.tracking-indicator {
+    background: #28a745;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    margin-left: 10px;
 }
 
 /* Interval controls */

@@ -57,7 +57,21 @@ socket.on('alarm_triggered', function(data) {
 });
 
 socket.on('alarm_cleared', function(data) {
+    console.log('✅ Alarm cleared:', data.reason || 'manual');
     hideAlarm();
+});
+
+// Alarm acknowledged event
+socket.on('alarm_acknowledged', function(data) {
+    console.log('✅ Alarm acknowledged by user');
+    hideAlarm();
+});
+
+// Detection tracking status update
+socket.on('detection_tracking_update', function(data) {
+    console.log('🔄 Detection tracking status updated');
+    lastDetections = data.detections;
+    updateCurrentDetections(data.detections);
 });
 
 // Connection debug
@@ -127,24 +141,33 @@ function updateCurrentDetections(detections) {
     
     container.innerHTML = `
         <p><strong>${detections.length} objects detected:</strong></p>
-        ${detections.map(detection => `
-            <div class="detection-item">
-                <div class="item-info">
-                    <div class="item-label">
-                        ${detection.label}
-                        <span class="confidence">${(detection.confidence * 100).toFixed(1)}%</span>
+        ${detections.map(detection => {
+            // Create track button HTML based on tracking status
+            let trackButtonHtml = '';
+            if (detection.is_tracked) {
+                trackButtonHtml = '<span class="btn btn-success" style="opacity: 0.6; cursor: not-allowed;">Already Tracked ✓</span>';
+            } else {
+                trackButtonHtml = `<button class="btn btn-primary" onclick="addToTracking(${JSON.stringify(detection).replace(/"/g, '&quot;')})">Track This</button>`;
+            }
+            
+            return `
+                <div class="detection-item ${detection.is_tracked ? 'already-tracked' : ''}">
+                    <div class="item-info">
+                        <div class="item-label">
+                            ${detection.label}
+                            <span class="confidence">${(detection.confidence * 100).toFixed(1)}%</span>
+                            ${detection.is_tracked ? '<span class="tracking-indicator">🔍 Tracked</span>' : ''}
+                        </div>
+                        <div class="item-details">
+                            Class ID: ${detection.class_id} • 
+                            BBox: (${detection.bbox.x1.toFixed(0)}, ${detection.bbox.y1.toFixed(0)}) - 
+                            (${detection.bbox.x2.toFixed(0)}, ${detection.bbox.y2.toFixed(0)})
+                        </div>
                     </div>
-                    <div class="item-details">
-                        Class ID: ${detection.class_id} • 
-                        BBox: (${detection.bbox.x1.toFixed(0)}, ${detection.bbox.y1.toFixed(0)}) - 
-                        (${detection.bbox.x2.toFixed(0)}, ${detection.bbox.y2.toFixed(0)})
-                    </div>
+                    ${trackButtonHtml}
                 </div>
-                <button class="btn btn-primary" onclick="addToTracking(${JSON.stringify(detection).replace(/"/g, '&quot;')})">
-                    Track This
-                </button>
-            </div>
-        `).join('')}
+            `;
+        }).join('')}
     `;
 }
 
@@ -239,6 +262,12 @@ async function changeInterval(delta) {
 
 // Add object to tracking
 async function addToTracking(detection) {
+    // Check if already tracked (client-side check)
+    if (detection.is_tracked) {
+        alert('This object is already being tracked!');
+        return;
+    }
+    
     try {
         const response = await fetch('/api/tracking/add', {
             method: 'POST',
@@ -248,7 +277,9 @@ async function addToTracking(detection) {
         
         const data = await response.json();
         if (data.success) {
+            console.log('✅ Object added to tracking:', data.item);
             updateTrackingStatus();
+            // Note: Detection list will be updated automatically via socket event
         } else {
             alert(data.message);
         }
@@ -395,14 +426,20 @@ function hideAlarm() {
 // Acknowledge alarm
 async function acknowledgeAlarm() {
     try {
-        const response = await fetch('/api/alarm/acknowledge', { method: 'POST' });
+        console.log('🔕 Acknowledging alarm...');
+        const response = await fetch('/api/tracking/alarm/acknowledge', { method: 'POST' });
         const data = await response.json();
         
         if (data.success) {
-            hideAlarm();
+            console.log('✅ Alarm acknowledged successfully');
+            // Don't hide alarm here - let the socket event handle it
+        } else {
+            console.error('❌ Failed to acknowledge alarm:', data.message);
+            alert('Failed to acknowledge alarm: ' + data.message);
         }
     } catch (error) {
-        console.error('Error acknowledging alarm:', error);
+        console.error('❌ Error acknowledging alarm:', error);
+        alert('Error acknowledging alarm: ' + error.message);
     }
 }
 

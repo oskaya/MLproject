@@ -49,12 +49,37 @@ def get_camera_status():
     }
 
 def get_tracking_status():
-    """Get current tracking status"""
+    """Get current tracking status with detailed information"""
     return {
+        'tracked_items': tracked_items,
         'tracking_active': tracking_active,
         'tracking_interval': tracking_interval,
         'alarm_active': alarm_active,
-        'tracked_items': tracked_items,
         'missing_items': missing_items,
-        'count': len(tracked_items)
+        'auto_detection_active': auto_detection_active,
+        'camera_streaming': camera_streaming,
+        'latest_detections': latest_detections
     }
+
+def is_object_already_tracked(label, class_id=None):
+    """
+    Check if an object with the same label (and optionally class_id) is already being tracked
+    
+    Args:
+        label: Object label to check
+        class_id: Optional class ID for more precise matching
+        
+    Returns:
+        Boolean indicating if object is already tracked
+    """
+    for tracked_item in tracked_items:
+        if tracked_item['label'] == label:
+            # If class_id is provided, use it for more precise matching
+            if class_id is not None:
+                return tracked_item.get('class_id') == class_id
+            return True
+    return False
+
+def get_tracked_labels():
+    """Get set of all currently tracked object labels"""
+    return {item['label'] for item in tracked_items}

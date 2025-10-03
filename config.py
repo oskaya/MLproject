@@ -20,7 +20,7 @@ class Config:
     
     # Detection Configuration
     AUTO_DETECTION_INTERVAL = 5  # seconds
-    DETECTION_CONFIDENCE_THRESHOLD = 0.5
+    DETECTION_CONFIDENCE_THRESHOLD = 0.3  # Lower threshold for better tracking of already tracked items
     
     # Tracking Configuration
     DEFAULT_TRACKING_INTERVAL = 5  # seconds

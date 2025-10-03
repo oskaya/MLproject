@@ -36,9 +36,17 @@ def register_handlers(socketio):
 
     @socketio.on('camera_stopped')
     def handle_camera_stopped(data):
+        # If alarm was active, clear it due to camera stop
+        if state.alarm_active:
+            socketio.emit('alarm_cleared', {
+                'reason': 'camera_stopped',
+                'timestamp': datetime.now().isoformat()
+            })
+            
         state.camera_streaming = False
         ml_service.stop_auto_detection()
-        print("📹 Camera stopped")
+        state.reset_tracking_state()  # Reset tracking state when camera stops
+        print("📹 Camera stopped - alarms cleared")
         emit('camera_status', {
             'connected': state.camera_connected, 
             'streaming': False
@@ -74,6 +82,14 @@ def register_handlers(socketio):
 
     @socketio.on('camera_disconnect')
     def handle_camera_disconnect():
+        # If alarm was active, clear it due to camera disconnect
+        if state.alarm_active:
+            socketio.emit('alarm_cleared', {
+                'reason': 'camera_disconnected',
+                'timestamp': datetime.now().isoformat()
+            })
+            
         state.reset_camera_state()
-        print("📹 Camera disconnected")
+        state.reset_tracking_state()  # Also reset tracking state
+        print("📹 Camera disconnected - alarms cleared")
         emit('camera_status', {'connected': False, 'streaming': False})

@@ -69,12 +69,23 @@ def auto_detect_objects(socketio):
                 detections = detect_objects(state.latest_frame)
                 
                 if detections is not None:
-                    state.latest_detections = detections
-                    print(f"📊 Auto-detected {len(detections)} objects")
+                    # Enhance detections with tracking info
+                    enhanced_detections = []
+                    for detection in detections:
+                        enhanced_detection = detection.copy()
+                        # Check if this object is already being tracked
+                        enhanced_detection['is_tracked'] = state.is_object_already_tracked(
+                            detection['label'], 
+                            detection.get('class_id')
+                        )
+                        enhanced_detections.append(enhanced_detection)
                     
-                    # Send to frontend
+                    state.latest_detections = enhanced_detections
+                    print(f"📊 Auto-detected {len(enhanced_detections)} objects ({len([d for d in enhanced_detections if d['is_tracked']])} already tracked)")
+                    
+                    # Send to frontend with tracking info
                     socketio.emit('auto_detection_result', {
-                        'detections': detections,
+                        'detections': enhanced_detections,
                         'image': state.latest_frame,
                         'timestamp': datetime.now().isoformat()
                     })
