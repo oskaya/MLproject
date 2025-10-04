@@ -5,7 +5,7 @@ Handles object tracking and monitoring
 import time
 import threading
 from datetime import datetime
-from config import Config
+from webapp_config import WebAppConfig
 import app.state as state
 
 def add_to_tracking(detection):
@@ -151,7 +151,7 @@ def check_tracked_items(socketio):
                         # Check if missing for more than threshold intervals AND alarm is enabled
                         if tracked_item.get('alarm_enabled', True):
                             last_seen = datetime.fromisoformat(tracked_item['last_seen'])
-                            threshold_seconds = state.tracking_interval * Config.MISSING_ITEM_THRESHOLD_MULTIPLIER
+                            threshold_seconds = state.tracking_interval * WebAppConfig.MISSING_ITEM_THRESHOLD_MULTIPLIER
                             time_missing = (datetime.now() - last_seen).total_seconds()
                             print(f"⏰ {tracked_item['label']} missing for {time_missing:.1f}s (threshold: {threshold_seconds}s)")
                             if time_missing > threshold_seconds:
@@ -217,8 +217,8 @@ def stop_tracking():
 
 def set_tracking_interval(new_interval):
     """Set tracking check interval"""
-    if not isinstance(new_interval, int) or new_interval < Config.MIN_TRACKING_INTERVAL or new_interval > Config.MAX_TRACKING_INTERVAL:
-        return False, f'Interval must be between {Config.MIN_TRACKING_INTERVAL}-{Config.MAX_TRACKING_INTERVAL} seconds'
+    if not isinstance(new_interval, int) or new_interval < WebAppConfig.MIN_TRACKING_INTERVAL or new_interval > WebAppConfig.MAX_TRACKING_INTERVAL:
+        return False, f'Interval must be between {WebAppConfig.MIN_TRACKING_INTERVAL}-{WebAppConfig.MAX_TRACKING_INTERVAL} seconds'
     
     state.tracking_interval = new_interval
     print(f"⏱️ Tracking interval changed to {state.tracking_interval} seconds")

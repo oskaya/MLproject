@@ -1,16 +1,18 @@
 """
 Tracking Routes
-API endpoints for object tracking
+API endpoints for object tracking management
 """
 from flask import Blueprint, request, jsonify
+from datetime import datetime
 import app.state as state
-from app.services import tracking_service
+from app.services import tracking_service, auth_service
 from app import socketio
 
 bp = Blueprint('tracking', __name__, url_prefix='/api/tracking')
 
 @bp.route('/add', methods=['POST'])
-def add_to_tracking():
+@auth_service.login_required
+def add_tracking():
     """Add detected object to tracking list"""
     data = request.get_json()
     detection = data.get('detection')
@@ -36,6 +38,7 @@ def add_to_tracking():
     })
 
 @bp.route('/remove', methods=['POST'])
+@auth_service.login_required
 def remove_from_tracking():
     """Remove object from tracking list"""
     data = request.get_json()
@@ -49,6 +52,7 @@ def remove_from_tracking():
     return jsonify({'success': True, 'message': 'Item removed from tracking'})
 
 @bp.route('/start', methods=['POST'])
+@auth_service.login_required
 def start_tracking():
     """Start active tracking"""
     success, message = tracking_service.start_tracking(socketio)
@@ -56,17 +60,20 @@ def start_tracking():
     return jsonify({'success': success, 'message': message})
 
 @bp.route('/stop', methods=['POST'])
+@auth_service.login_required
 def stop_tracking():
     """Stop active tracking"""
     tracking_service.stop_tracking()
     return jsonify({'success': True, 'message': 'Tracking stopped'})
 
 @bp.route('/status', methods=['GET'])
+@auth_service.login_required
 def tracking_status():
     """Get current tracking status"""
     return jsonify(state.get_tracking_status())
 
 @bp.route('/clear', methods=['POST'])
+@auth_service.login_required
 def clear_tracking():
     """Clear all tracked items"""
     tracking_service.clear_tracking()
@@ -77,6 +84,7 @@ def clear_tracking():
     return jsonify({'success': True, 'message': 'All tracked items cleared'})
 
 @bp.route('/interval', methods=['POST'])
+@auth_service.login_required
 def set_tracking_interval():
     """Set tracking check interval"""
     data = request.get_json()
@@ -91,11 +99,13 @@ def set_tracking_interval():
     return jsonify(response)
 
 @bp.route('/interval', methods=['GET'])
+@auth_service.login_required
 def get_tracking_interval():
     """Get current tracking interval"""
     return jsonify({'interval': state.tracking_interval})
 
 @bp.route('/alarm/acknowledge', methods=['POST'])
+@auth_service.login_required
 def acknowledge_alarm():
     """Acknowledge the alarm (silence it but keep tracking)"""
     try:
@@ -106,6 +116,7 @@ def acknowledge_alarm():
         return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
 
 @bp.route('/alarm/enable/<item_id>', methods=['POST'])
+@auth_service.login_required
 def enable_alarm(item_id):
     """Re-enable alarm for a specific tracked item"""
     try:

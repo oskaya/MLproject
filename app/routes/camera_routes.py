@@ -5,12 +5,13 @@ API endpoints for camera control
 from flask import Blueprint, jsonify
 from datetime import datetime
 import app.state as state
-from app.services import ml_service, tracking_service
+from app.services import ml_service, tracking_service, auth_service
 from app import socketio
 
 bp = Blueprint('camera', __name__, url_prefix='/api/camera')
 
 @bp.route('/start', methods=['POST'])
+@auth_service.login_required
 def start_camera():
     if not state.camera_connected:
         return jsonify({'success': False, 'message': 'Camera not connected'})
@@ -19,6 +20,7 @@ def start_camera():
     return jsonify({'success': True, 'message': 'Camera start command sent'})
 
 @bp.route('/stop', methods=['POST'])
+@auth_service.login_required
 def stop_camera():
     if not state.camera_connected:
         return jsonify({'success': False, 'message': 'Camera not connected'})
@@ -45,5 +47,6 @@ def stop_camera():
     return jsonify({'success': True, 'message': 'Camera stop command sent'})
 
 @bp.route('/status', methods=['GET'])
+@auth_service.login_required
 def camera_status():
     return jsonify(state.get_camera_status())

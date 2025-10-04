@@ -6,17 +6,17 @@ import socketio
 import base64
 import time
 import threading
-from config import Config
+from camera_config import CameraConfig
 
 class CameraApp:
-    def __init__(self, webapp_url="http://localhost:5000"):
-        self.webapp_url = webapp_url
+    def __init__(self, webapp_url=None):
+        self.webapp_url = webapp_url or CameraConfig.WEBAPP_URL
         self.sio = socketio.Client()
         self.camera = None
         self.is_running = False
-        self.camera_index = Config.CAMERA_INDEX  # Use configured camera index
-        self.enable_auto_detection = Config.ENABLE_AUTO_CAMERA_DETECTION
-        self.preferred_cameras = Config.PREFERRED_CAMERAS  # Fallback cameras
+        self.camera_index = CameraConfig.CAMERA_INDEX  # Use configured camera index
+        self.enable_auto_detection = CameraConfig.ENABLE_AUTO_CAMERA_DETECTION
+        self.preferred_cameras = CameraConfig.PREFERRED_CAMERAS  # Fallback cameras
         self.setup_events()
         
     def find_available_camera(self):
@@ -113,9 +113,9 @@ class CameraApp:
             return
             
         # Set camera properties from config
-        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, Config.DEFAULT_CAMERA_WIDTH)
-        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, Config.DEFAULT_CAMERA_HEIGHT)
-        self.camera.set(cv2.CAP_PROP_FPS, Config.DEFAULT_CAMERA_FPS)
+        self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, CameraConfig.DEFAULT_CAMERA_WIDTH)
+        self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, CameraConfig.DEFAULT_CAMERA_HEIGHT)
+        self.camera.set(cv2.CAP_PROP_FPS, CameraConfig.DEFAULT_CAMERA_FPS)
         
         # Test if we can read a frame
         ret, test_frame = self.camera.read()
@@ -159,10 +159,10 @@ class CameraApp:
             if ret:
                 frame_count += 1
                 # Resize for better performance using config values
-                frame = cv2.resize(frame, (Config.DEFAULT_CAMERA_WIDTH, Config.DEFAULT_CAMERA_HEIGHT))
+                frame = cv2.resize(frame, (CameraConfig.DEFAULT_CAMERA_WIDTH, CameraConfig.DEFAULT_CAMERA_HEIGHT))
                 
                 # Encode to base64 with config quality
-                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), Config.JPEG_QUALITY]
+                encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), CameraConfig.JPEG_QUALITY]
                 _, buffer = cv2.imencode('.jpg', frame, encode_param)
                 frame_b64 = base64.b64encode(buffer).decode('utf-8')
                 
@@ -184,7 +184,7 @@ class CameraApp:
                 print("⚠️  Failed to read frame")
                 time.sleep(0.1)
                 
-            time.sleep(1.0 / Config.STREAM_FPS)  # Use config FPS
+            time.sleep(1.0 / CameraConfig.STREAM_FPS)  # Use config FPS
     
     def run(self):
         if self.connect():

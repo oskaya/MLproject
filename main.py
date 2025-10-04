@@ -2,7 +2,12 @@
 Main Application Entry Point
 Modular Object Tracking System
 """
-from config import Config
+import os
+
+# Allow insecure transport for development (must be set before importing OAuth libraries)
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
+from webapp_config import WebAppConfig
 from app import create_app
 from app.handlers.socket_handlers import register_handlers
 
@@ -14,19 +19,22 @@ def main():
     # Register socket handlers
     register_handlers(socketio)
     
+    # Debug: Print all routes
+    print("🔧 Available routes:")
+    for rule in app.url_map.iter_rules():
+        print(f"   {rule.rule} -> {rule.endpoint}")
+    
     # Print startup information
     print("🚀 Starting Object Tracking Web App...")
-    print(f"📡 ML API URL: {Config.ML_API_URL}")
-    print(f"📹 Camera Index: {Config.CAMERA_INDEX}")
-    print(f"🔍 Auto Camera Detection: {'Enabled' if Config.ENABLE_AUTO_CAMERA_DETECTION else 'Disabled'}")
-    print(f"🌐 Server: http://{Config.FLASK_HOST}:{Config.FLASK_PORT}")
+    print(f"📡 ML API URL: {WebAppConfig.ML_API_URL}")
+    print(f"🌐 Server: http://{WebAppConfig.FLASK_HOST}:{WebAppConfig.FLASK_PORT}")
     
     # Run the application
     socketio.run(
         app, 
-        host=Config.FLASK_HOST, 
-        port=Config.FLASK_PORT, 
-        debug=Config.FLASK_DEBUG
+        host=WebAppConfig.FLASK_HOST, 
+        port=WebAppConfig.FLASK_PORT, 
+        debug=WebAppConfig.FLASK_DEBUG
     )
 
 if __name__ == '__main__':

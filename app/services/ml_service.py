@@ -8,7 +8,7 @@ import io
 import time
 import threading
 from datetime import datetime
-from config import Config
+from webapp_config import WebAppConfig
 from app.state import latest_frame, latest_detections, auto_detection_active, camera_streaming
 import app.state as state
 
@@ -28,7 +28,7 @@ def detect_objects(frame_data):
         files = {'file': ('frame.jpg', io.BytesIO(image_bytes), 'image/jpeg')}
         
         # Send to ML API
-        response = requests.post(Config.ML_API_URL, files=files, timeout=Config.ML_API_TIMEOUT)
+        response = requests.post(WebAppConfig.ML_API_URL, files=files, timeout=WebAppConfig.ML_API_TIMEOUT)
         
         if response.status_code == 200:
             ml_result = response.json()
@@ -75,7 +75,7 @@ def auto_detect_objects(socketio):
     Args:
         socketio: SocketIO instance for emitting events
     """
-    print(f"🤖 Started automatic object detection (every {Config.AUTO_DETECTION_INTERVAL} seconds)")
+    print(f"🤖 Started automatic object detection (every {WebAppConfig.AUTO_DETECTION_INTERVAL} seconds)")
     
     while state.auto_detection_active and state.camera_streaming:
         if state.latest_frame:
@@ -110,7 +110,7 @@ def auto_detect_objects(socketio):
             except Exception as e:
                 print(f"❌ Auto-detection error: {e}")
         
-        time.sleep(Config.AUTO_DETECTION_INTERVAL)
+        time.sleep(WebAppConfig.AUTO_DETECTION_INTERVAL)
     
     print("🛑 Auto-detection stopped")
 

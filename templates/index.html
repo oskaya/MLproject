@@ -12,9 +12,26 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <h1>🎯 Object Tracking System</h1>
-        
+    <!-- User Navigation Bar -->
+    <nav class="user-navbar">
+        <div class="navbar-content">
+            <div class="navbar-left">
+                <h2>🎯 Object Tracking System</h2>
+            </div>
+            <div class="navbar-right">
+                <div class="user-info">
+                    <img src="{{ user.avatar_url }}" alt="Avatar" class="user-avatar">
+                    <div class="user-details">
+                        <span class="user-name">{{ user.name }}</span>
+                        <span class="user-login">@{{ user.login }}</span>
+                    </div>
+                    <a href="{{ url_for('auth.logout') }}" class="btn btn-logout">Logout</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">        
         <div id="cameraStatus" class="status status-disconnected">
             📷 Camera: Disconnected
         </div>

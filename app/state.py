@@ -3,7 +3,7 @@ Global Application State
 Centralized state management for the object tracking system
 """
 from datetime import datetime
-from config import Config
+from webapp_config import WebAppConfig
 
 # Camera state
 camera_connected = False
@@ -18,7 +18,7 @@ auto_detection_thread = None
 # Tracking state
 tracked_items = []
 tracking_active = False
-tracking_interval = Config.DEFAULT_TRACKING_INTERVAL
+tracking_interval = WebAppConfig.DEFAULT_TRACKING_INTERVAL
 tracking_thread = None
 
 # Alarm state
