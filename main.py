@@ -1,6 +1,6 @@
 """
 Main Application Entry Point
-Modular Object Tracking System
+Guard Vision V2 - Advanced Security Monitoring System
 """
 import os
 
@@ -25,7 +25,7 @@ def main():
         print(f"   {rule.rule} -> {rule.endpoint}")
     
     # Print startup information
-    print("🚀 Starting Object Tracking Web App...")
+    print("🚀 Starting Guard Vision V2...")
     print(f"📡 ML API URL: {WebAppConfig.ML_API_URL}")
     print(f"🌐 Server: http://{WebAppConfig.FLASK_HOST}:{WebAppConfig.FLASK_PORT}")
     

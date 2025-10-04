@@ -45,19 +45,25 @@ def github_login():
 @bp.route('/callback')
 def github_callback():
     """Handle GitHub OAuth callback"""
+    # Get authorization code and state
+    code = request.args.get('code')
+    state = request.args.get('state')
+    error = request.args.get('error')
+    
+    if error:
+        flash(f'GitHub authorization failed: {error}', 'error')
+        return redirect(url_for('auth.login'))
+    
+    if not code or not state:
+        flash('Invalid callback parameters.', 'error')
+        return redirect(url_for('auth.login'))
+    
+    # Verify state for CSRF protection
+    if state != session.get('github_state'):
+        flash('Invalid state parameter. Please try again.', 'error')
+        return redirect(url_for('auth.login'))
+    
     try:
-        # Verify state for CSRF protection
-        if request.args.get('state') != session.get('github_state'):
-            flash('Invalid state parameter. Please try again.', 'error')
-            return redirect(url_for('auth.login'))
-        
-        # Get authorization code
-        code = request.args.get('code')
-        if not code:
-            error = request.args.get('error', 'Unknown error')
-            flash(f'GitHub authorization failed: {error}', 'error')
-            return redirect(url_for('auth.login'))
-        
         # Exchange code for access token
         token_data = {
             'client_id': WebAppConfig.GITHUB_CLIENT_ID,
@@ -88,47 +94,54 @@ def github_callback():
         
         print(f"🔑 GitHub access token obtained")
         
-        # Get user information
-        user_info = auth_service.get_github_user_info(access_token)
-        if not user_info:
-            flash('Failed to get user information from GitHub.', 'error')
-            return redirect(url_for('auth.login'))
-        
-        print(f"👤 User info obtained: {user_info.get('login')} ({user_info.get('name', 'No name')})")
-        print(f"📧 User email: {user_info.get('email', 'No public email')}")
-        
-        # Check user access (whitelist or organization membership)
-        print(f"\n🔍 Checking access for: {user_info.get('login')}")
-        username = user_info.get('login')
-        if not auth_service.check_user_access(username, access_token, WebAppConfig.ALLOWED_GITHUB_ORG):
-            print(f"❌ Access denied for {user_info.get('login')}")
-            flash(f'Access denied. Contact administrator for access.', 'error')
-            return redirect(url_for('auth.login'))
-        
-        print(f"✅ Organization access granted for: {user_info.get('login')}")
-        print(f"🎉 Welcome {user_info.get('name', user_info.get('login'))}!")
-        
-        # Store user session
-        auth_service.store_user_session(access_token, user_info)
-        
-        flash(f'Welcome, {user_info.get("name")}!', 'success')
-        
-        # Clean up state
-        session.pop('github_state', None)
-        
-        # Redirect to original URL or home
-        return redirect(auth_service.get_auth_redirect_url())
-        
-    except Exception as e:
-        print(f"❌ Login error: {e}")
-        flash('Login failed due to an unexpected error.', 'error')
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Token exchange error: {e}")
+        flash('Failed to communicate with GitHub. Please try again.', 'error')
         return redirect(url_for('auth.login'))
+    
+    # Get user information
+    user_info = auth_service.get_github_user_info(access_token)
+    if not user_info:
+        flash('Failed to get user information from GitHub.', 'error')
+        return redirect(url_for('auth.login'))
+    
+    print(f"👤 User info obtained: {user_info.get('login')} ({user_info.get('name', 'No name')})")
+    print(f"📧 User email: {user_info.get('email', 'No public email')}")
+    
+    # Check user access (whitelist or organization membership)
+    print(f"\n🔍 Checking access for: {user_info.get('login')}")
+    username = user_info.get('login')
+    if not auth_service.check_user_access(username, access_token, WebAppConfig.ALLOWED_GITHUB_ORG):
+        print(f"❌ Access denied for {user_info.get('login')}")
+        flash(f'Access denied. Contact administrator for access.', 'error')
+        return redirect(url_for('auth.login'))
+    
+    print(f"✅ Access granted for: {user_info.get('login')}")
+    print(f"🎉 Welcome {user_info.get('name', user_info.get('login'))}!")
+    
+    # Store user session
+    auth_service.store_user_session(access_token, user_info)
+    
+    # Clean up state
+    session.pop('github_state', None)
+    
+    # Flash welcome message and redirect
+    flash(f'Welcome, {user_info.get("name", user_info.get("login"))}!', 'success')
+    
+    # Get redirect URL
+    next_url = session.pop('next_url', None)
+    if next_url and next_url != url_for('auth.login'):
+        return redirect(next_url)
+    return redirect(url_for('main.index'))
 
 @bp.route('/logout')
 def logout():
     """Logout user and clear session"""
     user = auth_service.get_current_user()
     username = user.get('login') if user else 'User'
+    
+    # Clear all flash messages first
+    session.pop('_flashes', None)
     
     auth_service.clear_user_session()
     

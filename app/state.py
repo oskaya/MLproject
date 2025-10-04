@@ -1,6 +1,6 @@
 """
 Global Application State
-Centralized state management for the object tracking system
+Centralized state management for the security monitoring system
 """
 from datetime import datetime
 from webapp_config import WebAppConfig

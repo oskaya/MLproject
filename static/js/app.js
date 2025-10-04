@@ -1,4 +1,4 @@
-// Object Tracking System JavaScript
+// Guard Vision V2 - Security Monitoring System JavaScript
 
 // Initialize socket connection and global variables
 const socket = io();

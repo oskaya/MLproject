@@ -1,5 +1,5 @@
 """
-Object Tracking System - Modular Application Package
+Guard Vision V2 - Security Monitoring System - Modular Application Package
 """
 import os
 from datetime import timedelta

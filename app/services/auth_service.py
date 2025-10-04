@@ -55,7 +55,7 @@ def check_github_organization(username, access_token, required_org):
     headers = {
         'Authorization': f'token {access_token}',
         'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'Object-Tracking-App'
+        'User-Agent': 'Guard-Vision-V2'
     }
     
     try:
@@ -171,3 +171,10 @@ def clear_user_session():
     session.pop('user_info', None)
     session.pop('next_url', None)
     print("🧹 User session cleared")
+
+def get_auth_redirect_url():
+    """Get URL to redirect to after successful authentication"""
+    next_url = session.pop('next_url', None)
+    if next_url and next_url != url_for('auth.login'):
+        return next_url
+    return url_for('main.index')
