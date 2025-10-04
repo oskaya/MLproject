@@ -34,7 +34,7 @@ def github_login():
     params = {
         'client_id': WebAppConfig.GITHUB_CLIENT_ID,
         'redirect_uri': url_for('auth.github_callback', _external=True),
-        'scope': 'user:email',
+        'scope': WebAppConfig.GITHUB_OAUTH_SCOPE,
         'state': state,
         'allow_signup': 'false'
     }
@@ -94,14 +94,19 @@ def github_callback():
             flash('Failed to get user information from GitHub.', 'error')
             return redirect(url_for('auth.login'))
         
-        print(f"👤 User info obtained: {user_info.get('login')}")
+        print(f"👤 User info obtained: {user_info.get('login')} ({user_info.get('name', 'No name')})")
+        print(f"📧 User email: {user_info.get('email', 'No public email')}")
         
-        # Check organization membership (skip for now to test basic auth)
-        # if not auth_service.check_github_organization(access_token, Config.ALLOWED_GITHUB_ORG):
-        #     flash(f'Access denied. You must be a member of the {Config.ALLOWED_GITHUB_ORG} organization.', 'error')
-        #     return redirect(url_for('auth.login'))
+        # Check user access (whitelist or organization membership)
+        print(f"\n🔍 Checking access for: {user_info.get('login')}")
+        username = user_info.get('login')
+        if not auth_service.check_user_access(username, access_token, WebAppConfig.ALLOWED_GITHUB_ORG):
+            print(f"❌ Access denied for {user_info.get('login')}")
+            flash(f'Access denied. Contact administrator for access.', 'error')
+            return redirect(url_for('auth.login'))
         
-        print(f"✅ Basic authentication successful for: {user_info.get('login')}")
+        print(f"✅ Organization access granted for: {user_info.get('login')}")
+        print(f"🎉 Welcome {user_info.get('name', user_info.get('login'))}!")
         
         # Store user session
         auth_service.store_user_session(access_token, user_info)
