@@ -5,7 +5,7 @@ API endpoints for camera control
 from flask import Blueprint, jsonify
 from datetime import datetime
 import app.state as state
-from app.services import ml_service
+from app.services import ml_service, tracking_service
 from app import socketio
 
 bp = Blueprint('camera', __name__, url_prefix='/api/camera')
@@ -25,6 +25,7 @@ def stop_camera():
     
     # Stop auto-detection and tracking when camera stops
     ml_service.stop_auto_detection()
+    tracking_service.stop_tracking()
     
     # If alarm was active, notify frontend that it's cleared due to camera stop
     if state.alarm_active:

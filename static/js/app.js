@@ -86,26 +86,59 @@ socket.on('disconnect', function() {
 // Camera UI cleanup events
 socket.on('clear_frame', function() {
     console.log('🧹 Clearing camera frame');
-    const videoFrame = document.getElementById('video-frame');
-    if (videoFrame) {
-        videoFrame.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'; // Transparent 1x1 pixel
+    const liveFrame = document.getElementById('liveFrame');
+    const noCamera = document.getElementById('noCamera');
+    const detectionInfo = document.getElementById('detectionInfo');
+    
+    if (liveFrame) {
+        liveFrame.style.display = 'none';
+    }
+    if (noCamera) {
+        noCamera.style.display = 'block';
+        noCamera.textContent = 'Camera stopped - click Start Camera to begin';
+    }
+    if (detectionInfo) {
+        detectionInfo.style.display = 'none';
+    }
+    
+    // Clear video overlay
+    const overlay = document.getElementById('videoOverlay');
+    if (overlay) {
+        overlay.innerHTML = '';
     }
 });
 
 socket.on('clear_detections', function() {
     console.log('🧹 Clearing detection results');
-    const detectionResults = document.getElementById('detection-results');
-    if (detectionResults) {
-        detectionResults.innerHTML = '<div class="detection-placeholder">No detections - camera stopped</div>';
+    const currentDetections = document.getElementById('currentDetections');
+    if (currentDetections) {
+        currentDetections.innerHTML = '<p>Camera stopped - no detections available.</p>';
     }
+    
+    // Reset detection counters
+    document.getElementById('detectionCount').textContent = '0';
+    document.getElementById('lastUpdate').textContent = 'Never';
+    document.getElementById('detectionStatus').textContent = 'Camera Stopped';
 });
 
 socket.on('clear_tracking_ui', function() {
     console.log('🧹 Clearing tracking UI');
-    const trackingList = document.getElementById('tracking-list');
-    if (trackingList) {
-        trackingList.innerHTML = '<div class="tracking-placeholder">No tracked items - camera stopped</div>';
+    const trackedItems = document.getElementById('trackedItems');
+    if (trackedItems) {
+        trackedItems.innerHTML = '<p>No items being tracked - camera stopped.</p>';
     }
+    
+    // Disable tracking button
+    const trackingBtn = document.getElementById('trackingBtn');
+    if (trackingBtn) {
+        trackingBtn.disabled = true;
+        trackingBtn.textContent = 'Start Tracking';
+        trackingBtn.className = 'btn btn-success';
+    }
+    
+    // Reset tracking state
+    isTracking = false;
+    lastDetections = [];
 });
 
 // =============================================================================

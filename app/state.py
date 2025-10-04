@@ -35,10 +35,12 @@ def reset_camera_state():
 
 def reset_tracking_state():
     """Reset all tracking-related state"""
-    global tracking_active, alarm_active, missing_items
+    global tracking_active, alarm_active, missing_items, tracked_items, latest_detections
     tracking_active = False
     alarm_active = False
     missing_items = []
+    tracked_items = []
+    latest_detections = []
 
 def get_camera_status():
     """Get current camera status"""
