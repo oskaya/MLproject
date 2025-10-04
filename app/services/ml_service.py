@@ -33,15 +33,31 @@ def detect_objects(frame_data):
         if response.status_code == 200:
             ml_result = response.json()
             
+            # Debug: Print ML response format
+            print(f"🔍 ML API Response: {ml_result}")
+            
             # Transform ML response
             detections = []
             for detection in ml_result.get('detections', []):
-                detections.append({
+                # Convert bbox format: {x1, y1, x2, y2} -> {x, y, width, height}
+                bbox_raw = detection.get('bbox', {})
+                bbox_converted = {}
+                if bbox_raw and 'x1' in bbox_raw:
+                    bbox_converted = {
+                        'x': bbox_raw['x1'],
+                        'y': bbox_raw['y1'], 
+                        'width': bbox_raw['x2'] - bbox_raw['x1'],
+                        'height': bbox_raw['y2'] - bbox_raw['y1']
+                    }
+                
+                detection_item = {
                     'label': detection['label'],
                     'confidence': detection['confidence'],
                     'class_id': detection['class_id'],
-                    'bbox': detection['bbox']
-                })
+                    'bbox': bbox_converted
+                }
+                print(f"🔍 Detection: {detection_item}")
+                detections.append(detection_item)
             
             return detections
         else:
@@ -73,10 +89,11 @@ def auto_detect_objects(socketio):
                     enhanced_detections = []
                     for detection in detections:
                         enhanced_detection = detection.copy()
-                        # Check if this object is already being tracked
+                        # Check if this object is already being tracked (with bbox proximity)
                         enhanced_detection['is_tracked'] = state.is_object_already_tracked(
                             detection['label'], 
-                            detection.get('class_id')
+                            detection.get('class_id'),
+                            detection.get('bbox')  # Pass bbox for proximity matching
                         )
                         enhanced_detections.append(enhanced_detection)
                     

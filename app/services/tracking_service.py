@@ -18,8 +18,13 @@ def add_to_tracking(detection):
     Returns:
         Created tracking item
     """
-    # Check if already tracked to prevent duplicates
-    if state.is_object_already_tracked(detection.get('label'), detection.get('class_id')):
+    # Check if already tracked to prevent duplicates (using bbox proximity)
+    if state.is_object_already_tracked(
+        detection.get('label'), 
+        detection.get('class_id'),
+        detection.get('bbox'),
+        proximity_threshold=25  # Tighter threshold for better separation
+    ):
         return None
         
     tracking_item = {
@@ -99,6 +104,8 @@ def check_tracked_items(socketio):
             current_missing = []
             for tracked_item in state.tracked_items:
                 item_found = False
+                best_match = None
+                best_distance = float('inf')
                 
                 # Look for similar objects in current detections (if any)
                 if state.latest_detections:
@@ -107,11 +114,29 @@ def check_tracked_items(socketio):
                             # Use lower threshold for tracking (more lenient for already tracked items)
                             tracking_threshold = 0.3  # Lower than detection threshold for better continuity
                             if detection['confidence'] > tracking_threshold:
-                                item_found = True
-                                tracked_item['last_seen'] = datetime.now().isoformat()
-                                tracked_item['is_present'] = True
-                                print(f"✅ Found: {tracked_item['label']} (confidence: {detection['confidence']:.2f}, threshold: {tracking_threshold})")
-                                break
+                                # Calculate bbox proximity for better matching
+                                distance = state.calculate_bbox_distance(
+                                    tracked_item.get('bbox', {}), 
+                                    detection.get('bbox', {})
+                                )
+                                overlap_ratio = state.calculate_bbox_overlap_ratio(
+                                    tracked_item.get('bbox', {}), 
+                                    detection.get('bbox', {})
+                                )
+                                
+                                # Consider it a match if close enough or overlapping
+                                if distance <= 100 or overlap_ratio > 0.2:  # More lenient for tracking
+                                    if distance < best_distance:
+                                        best_distance = distance
+                                        best_match = detection
+                
+                if best_match:
+                    item_found = True
+                    tracked_item['last_seen'] = datetime.now().isoformat()
+                    tracked_item['is_present'] = True
+                    tracked_item['bbox'] = best_match.get('bbox', {})  # Update bbox position
+                    print(f"✅ Found: {tracked_item['label']} (confidence: {best_match['confidence']:.2f}, distance: {best_distance:.1f}px)")
+                    tracked_item['missing_count'] = 0
                 
                 if not item_found:
                     # Increment missing count for hysteresis
@@ -138,9 +163,6 @@ def check_tracked_items(socketio):
                             print(f"🔇 {tracked_item['label']} missing but alarm disabled")
                     else:
                         print(f"🔍 {tracked_item['label']} not found (attempt {missing_count}/2)")
-                else:
-                    # Item was found, reset missing count and already logged above
-                    tracked_item['missing_count'] = 0
             
             # Update missing items
             state.missing_items = current_missing

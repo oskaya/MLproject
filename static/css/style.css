@@ -271,3 +271,16 @@ body {
         margin: 10px;
     }
 }
+
+/* Placeholder styles for cleared UI elements */
+.detection-placeholder,
+.tracking-placeholder {
+    padding: 20px;
+    text-align: center;
+    color: #6c757d;
+    font-style: italic;
+    background: #f8f9fa;
+    border: 1px dashed #dee2e6;
+    border-radius: 4px;
+    margin: 10px 0;
+}

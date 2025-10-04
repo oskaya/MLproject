@@ -35,6 +35,11 @@ def stop_camera():
     
     state.reset_tracking_state()
     
+    # Clear frontend UI elements
+    socketio.emit('clear_frame')  # Clear the video frame
+    socketio.emit('clear_detections')  # Clear current detections list
+    socketio.emit('clear_tracking_ui')  # Clear tracking controls
+    
     socketio.emit('camera_command', {'action': 'stop'})
     return jsonify({'success': True, 'message': 'Camera stop command sent'})
 

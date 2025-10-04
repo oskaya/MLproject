@@ -83,6 +83,31 @@ socket.on('disconnect', function() {
     console.log('🔌 Disconnected from web app');
 });
 
+// Camera UI cleanup events
+socket.on('clear_frame', function() {
+    console.log('🧹 Clearing camera frame');
+    const videoFrame = document.getElementById('video-frame');
+    if (videoFrame) {
+        videoFrame.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'; // Transparent 1x1 pixel
+    }
+});
+
+socket.on('clear_detections', function() {
+    console.log('🧹 Clearing detection results');
+    const detectionResults = document.getElementById('detection-results');
+    if (detectionResults) {
+        detectionResults.innerHTML = '<div class="detection-placeholder">No detections - camera stopped</div>';
+    }
+});
+
+socket.on('clear_tracking_ui', function() {
+    console.log('🧹 Clearing tracking UI');
+    const trackingList = document.getElementById('tracking-list');
+    if (trackingList) {
+        trackingList.innerHTML = '<div class="tracking-placeholder">No tracked items - camera stopped</div>';
+    }
+});
+
 // =============================================================================
 // Detection and Overlay Functions
 // =============================================================================
@@ -108,10 +133,10 @@ function updateDetectionOverlays(detections) {
             // Create bounding box
             const boxDiv = document.createElement('div');
             boxDiv.className = 'detection-bbox';
-            boxDiv.style.left = (bbox.x1 * scaleX) + 'px';
-            boxDiv.style.top = (bbox.y1 * scaleY) + 'px';
-            boxDiv.style.width = ((bbox.x2 - bbox.x1) * scaleX) + 'px';
-            boxDiv.style.height = ((bbox.y2 - bbox.y1) * scaleY) + 'px';
+            boxDiv.style.left = (bbox.x * scaleX) + 'px';
+            boxDiv.style.top = (bbox.y * scaleY) + 'px';
+            boxDiv.style.width = (bbox.width * scaleX) + 'px';
+            boxDiv.style.height = (bbox.height * scaleY) + 'px';
             
             // Create label
             const labelDiv = document.createElement('div');
@@ -160,8 +185,8 @@ function updateCurrentDetections(detections) {
                         </div>
                         <div class="item-details">
                             Class ID: ${detection.class_id} • 
-                            BBox: (${detection.bbox.x1.toFixed(0)}, ${detection.bbox.y1.toFixed(0)}) - 
-                            (${detection.bbox.x2.toFixed(0)}, ${detection.bbox.y2.toFixed(0)})
+                            BBox: (${detection.bbox.x.toFixed(0)}, ${detection.bbox.y.toFixed(0)}) - 
+                            Size: ${detection.bbox.width.toFixed(0)}x${detection.bbox.height.toFixed(0)}
                         </div>
                     </div>
                     ${trackButtonHtml}
