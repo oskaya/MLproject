@@ -1,0 +1,16 @@
+# GitHub OAuth Configuration
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+
+# Flask Secret Key
+SECRET_KEY=development_secret_key_change_in_production
+
+# Organization Authorization  
+ALLOWED_GITHUB_ORG='InfoTech-Academy'
+
+# Username Whitelist (comma separated, no spaces)
+ALLOWED_GITHUB_USERS=oskaya
+
+# Application Settings
+FLASK_ENV=development
+DEBUG=True
