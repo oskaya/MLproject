@@ -43,10 +43,10 @@ class WebAppConfig:
     GITHUB_OAUTH_SCOPE = 'user:email'  # Using public organization membership instead of read:org
     
     # Organization Authorization
-    ALLOWED_GITHUB_ORG = os.getenv('ALLOWED_GITHUB_ORG', 'InfoTech-Academy')
+    #ALLOWED_GITHUB_ORG = os.getenv('ALLOWED_GITHUB_ORG', 'InfoTech-Academy')
     
     # Username Whitelist (alternative to organization check)
-    ALLOWED_GITHUB_USERS = os.getenv('ALLOWED_GITHUB_USERS', 'oskaya').split(',')  # Comma separated usernames
+    ALLOWED_GITHUB_USERS = os.getenv('ALLOWED_GITHUB_USERS', 'oskaya,ErsinOzturk10').split(',')  # Comma separated usernames
     
     # Session Configuration
     SESSION_TIMEOUT_HOURS = 24  # hours
