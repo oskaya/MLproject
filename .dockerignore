@@ -1,0 +1,63 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment files (will be provided at runtime)
+.env
+.env.local
+.env.production
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Development files
+node_modules/
+npm-debug.log*
+
+# Documentation
+README.md
+docs/
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Docker files
+Dockerfile
+docker-compose.yml
+.dockerignore

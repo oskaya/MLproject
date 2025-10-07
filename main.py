@@ -34,7 +34,8 @@ def main():
         app, 
         host=WebAppConfig.FLASK_HOST, 
         port=WebAppConfig.FLASK_PORT, 
-        debug=WebAppConfig.FLASK_DEBUG
+        debug=WebAppConfig.FLASK_DEBUG,
+        allow_unsafe_werkzeug=True
     )
 
 if __name__ == '__main__':
