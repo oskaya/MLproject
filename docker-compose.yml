@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # ML Model Service
   ml-api:
-    image: oskaya/visionguard:v1.0
+    image: oskaya/visionguard:ml
     container_name: guard-vision-ml
     ports:
       - "8000:8000"
@@ -13,7 +13,7 @@ services:
 
   # Guard Vision V2 Web Application
   web-app:
-    build: .
+    image: oskaya/visionguard:web
     container_name: guard-vision-web
     ports:
       - "5000:5000"
