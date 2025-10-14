@@ -46,7 +46,7 @@ class WebAppConfig:
     #ALLOWED_GITHUB_ORG = os.getenv('ALLOWED_GITHUB_ORG', 'InfoTech-Academy')
     
     # Username Whitelist (alternative to organization check)
-    ALLOWED_GITHUB_USERS = os.getenv('ALLOWED_GITHUB_USERS', 'oskaya,ErsinOzturk10').split(',')  # Comma separated usernames
+    ALLOWED_GITHUB_USERS = os.getenv('ALLOWED_GITHUB_USERS', 'oskaya,ErsinOzturk10,SemaIstek').split(',')  # Comma separated usernames
     
     # Session Configuration
     SESSION_TIMEOUT_HOURS = 24  # hours
